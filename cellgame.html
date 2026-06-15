@@ -1,0 +1,1702 @@
+33333<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CELLDIVE — explore real cells from OpenOrganelle</title>
+<style>
+  :root{
+    --bg:#04060c;
+    --ink:#dfe9f5;
+    --dim:#6b7a92;
+    --accent:#7fe7ff;
+    --good:#9dffb0;
+    --warn:#ffd27f;
+    --line:rgba(127,231,255,0.22);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--ink)}
+  #app{position:fixed;inset:0}
+  canvas{display:block}
+  a{color:var(--accent)}
+
+  .panel{
+    position:absolute;padding:10px 12px;border:1px solid var(--line);
+    background:rgba(5,7,13,0.55);backdrop-filter:blur(6px);
+    font-size:12px;line-height:1.5;letter-spacing:.02em;
+  }
+  .hidden{display:none !important}
+
+  /* ---------- specimen-select screen ---------- */
+  #select{position:fixed;inset:0;overflow:auto;background:
+    radial-gradient(1200px 800px at 70% -10%, rgba(40,90,140,.25), transparent 60%),
+    radial-gradient(1000px 700px at 0% 110%, rgba(120,40,120,.20), transparent 55%),
+    var(--bg);z-index:30}
+  #select .wrap{max-width:1180px;margin:0 auto;padding:38px 26px 80px}
+  #select h1{font-size:26px;letter-spacing:.14em;margin:0;font-weight:700}
+  #select h1 .b{color:var(--accent)}
+  #select .tag{color:var(--dim);font-size:13px;margin-top:8px;max-width:760px;line-height:1.7}
+  #select .tag a{text-decoration:none;border-bottom:1px solid var(--line)}
+  #bar{display:flex;gap:10px;align-items:center;margin:22px 0 14px;flex-wrap:wrap}
+  #bar input{flex:1;min-width:200px;background:rgba(255,255,255,.04);border:1px solid var(--line);
+    color:var(--ink);padding:9px 12px;font:inherit;font-size:13px;outline:none}
+  #bar input:focus{border-color:var(--accent)}
+  .chip{border:1px solid var(--line);color:var(--dim);padding:6px 11px;font-size:11px;cursor:pointer;
+    user-select:none;letter-spacing:.04em;white-space:nowrap}
+  .chip.on{color:var(--bg);background:var(--accent);border-color:var(--accent)}
+  #status{color:var(--dim);font-size:11px;margin:2px 2px 16px}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(208px,1fr));gap:14px}
+  .card{border:1px solid var(--line);background:rgba(10,14,22,.5);cursor:pointer;overflow:hidden;
+    transition:transform .12s ease, border-color .12s ease;position:relative;display:flex;flex-direction:column}
+  .card:hover{transform:translateY(-3px);border-color:var(--accent)}
+  .card .thumb{aspect-ratio:1/1;background:#0a0e16 center/cover no-repeat;position:relative}
+  .card .thumb:after{content:"";position:absolute;inset:0;
+    background:linear-gradient(to top, rgba(4,6,12,.92), transparent 55%)}
+  .card .meta{padding:9px 11px 11px;position:relative;margin-top:-42px}
+  .card .id{font-size:12px;font-weight:600;letter-spacing:.02em;word-break:break-word}
+  .card .who{color:var(--dim);font-size:10.5px;margin-top:3px;line-height:1.45}
+  .card .kind{position:absolute;top:8px;left:8px;font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--bg);background:var(--accent);padding:2px 7px;opacity:.92}
+  .card .real{position:absolute;top:8px;right:8px;font-size:9px;letter-spacing:.1em;color:var(--good);
+    border:1px solid rgba(157,255,176,.45);background:rgba(6,18,10,.7);padding:2px 6px}
+  .card .go{position:absolute;right:9px;bottom:9px;font-size:10px;color:var(--accent);opacity:0;transition:opacity .12s}
+  .card:hover .go{opacity:1}
+
+  /* ---------- in-game HUD ---------- */
+  #game{position:fixed;inset:0;z-index:10}
+  #hud-top{top:14px;left:14px;max-width:300px}
+  #hud-top h1{margin:0 0 6px;font-size:12px;font-weight:600;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent);display:flex;justify-content:space-between;gap:8px}
+  #hud-top h1 .exit{color:var(--dim);cursor:pointer;font-weight:400;letter-spacing:.06em}
+  #hud-top h1 .exit:hover{color:var(--ink)}
+  #hud-top .sub{color:var(--dim);font-size:10.5px;line-height:1.5}
+  .row{display:flex;justify-content:space-between;gap:14px}
+  .row .k{color:var(--dim)}
+  .row .v{color:var(--ink)}
+  #hud-top .stats{margin-top:8px}
+
+  #obj{top:14px;right:14px;min-width:230px;max-width:260px}
+  #obj .label{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.16em}
+  #obj .name{font-size:14px;margin-top:3px}
+  #obj .hint{color:var(--dim);font-size:10.5px;margin-top:6px;line-height:1.5}
+  #obj.scanning .name{color:var(--warn)}
+  #obj.done .name{color:var(--good)}
+  #comp{margin-top:9px;display:flex;align-items:center;gap:10px}
+  /* 3D direction sphere: a dot orbits the face — centre = dead ahead, rim = 90° off, rim+ring = behind */
+  #comp .ball{position:relative;width:42px;height:42px;border-radius:50%;flex:0 0 auto;
+    background:radial-gradient(circle at 35% 30%, rgba(127,231,255,.28), rgba(10,18,30,.6) 70%);
+    box-shadow:inset 0 0 0 1px var(--line), inset -4px -5px 9px rgba(0,0,0,.5), inset 3px 3px 7px rgba(127,231,255,.12)}
+  #comp .ball:before{content:"";position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px;
+    border-radius:50%;background:rgba(223,233,245,.4)}  /* centre reference */
+  #comp #compDot{position:absolute;left:50%;top:50%;width:9px;height:9px;margin:-4.5px;border-radius:50%;
+    background:var(--accent);box-shadow:0 0 7px var(--accent);transition:transform .05s linear}
+  #comp #compDot.behind{background:transparent;border:2px solid var(--accent);box-shadow:none;width:11px;height:11px;margin:-5.5px}
+  #comp .dist{color:var(--dim);font-size:11px}
+
+  #scanbar{position:absolute;left:50%;top:calc(50% + 26px);transform:translateX(-50%);
+    width:120px;height:3px;background:rgba(255,255,255,.12);opacity:0;transition:opacity .15s}
+  #scanbar > i{display:block;height:100%;width:0;background:var(--warn)}
+
+  #help{left:50%;bottom:16px;transform:translateX(-50%);text-align:center;color:var(--dim);
+    font-size:11px;letter-spacing:.03em;white-space:nowrap}
+  #help b{color:var(--ink);font-weight:600}
+
+  #cross{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;
+    pointer-events:none;opacity:.7;transition:opacity .15s}
+  #cross.lock{opacity:1}
+  #cross:before,#cross:after{content:"";position:absolute;background:var(--accent)}
+  #cross:before{left:9px;top:0;width:1px;height:20px}
+  #cross:after{top:9px;left:0;height:1px;width:20px}
+  #cross.lock:before,#cross.lock:after{background:var(--warn)}
+
+  #flash{position:absolute;left:50%;top:34%;transform:translateX(-50%);
+    font-size:16px;letter-spacing:.16em;text-transform:uppercase;color:var(--good);
+    opacity:0;transition:opacity .4s;pointer-events:none;text-shadow:0 0 18px rgba(157,255,176,.5);white-space:nowrap}
+
+  /* ---------- data card (revealed on scan) ---------- */
+  #card{position:absolute;left:14px;bottom:14px;max-width:380px;border-color:var(--good);
+    transform:translateY(8px);opacity:0;transition:opacity .25s, transform .25s;pointer-events:none}
+  #card.show{opacity:1;transform:none;pointer-events:auto}
+  #card .ct{color:var(--good);font-size:13px;font-weight:600;letter-spacing:.04em;display:flex;justify-content:space-between}
+  #card .cx{color:var(--dim);cursor:pointer}
+  #card .cx:hover{color:var(--ink)}
+  #card .cd{margin-top:7px;font-size:11.5px;line-height:1.65;color:var(--ink)}
+  #card .seg{margin-top:9px;font-size:10.5px;color:var(--dim);line-height:1.55}
+  #card .seg b{color:var(--accent);font-weight:600}
+
+  /* ---------- finish overlay ---------- */
+  #win{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background:rgba(4,6,12,.78);backdrop-filter:blur(4px);opacity:0;transition:opacity .4s;pointer-events:none}
+  #win.show{opacity:1;pointer-events:auto}
+  #win .box{border:1px solid var(--good);background:rgba(8,12,20,.85);padding:26px 30px;max-width:440px;text-align:center}
+  #win h2{margin:0 0 8px;color:var(--good);letter-spacing:.1em;font-size:18px}
+  #win p{color:var(--dim);font-size:12px;line-height:1.7;margin:6px 0}
+  #win .btns{margin-top:18px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  #win .btn{border:1px solid var(--line);color:var(--ink);padding:9px 15px;font:inherit;font-size:12px;
+    cursor:pointer;text-decoration:none;background:none}
+  #win .btn.p{border-color:var(--accent);color:var(--accent)}
+  #win .btn:hover{background:rgba(127,231,255,.08)}
+
+  #loading{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+    background:var(--bg);color:var(--dim);font-size:13px;letter-spacing:.1em;flex-direction:column;gap:14px}
+  #loading .ring{width:34px;height:34px;border:2px solid var(--line);border-top-color:var(--accent);
+    border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ---------- ng-style layer panel ---------- */
+  #layers{left:14px;top:170px;min-width:188px;max-width:220px;padding:8px 10px}
+  #layers .lhead{color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.16em;
+    display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  #layers .lhead #lhint{color:var(--dim);font-size:9px;letter-spacing:.04em;text-transform:none}
+  .lrow{display:flex;align-items:center;gap:7px;padding:2px 0;cursor:pointer;font-size:11.5px;user-select:none}
+  .lrow input{accent-color:var(--accent);width:12px;height:12px;margin:0;cursor:pointer}
+  .lrow .sw{width:11px;height:11px;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.25),0 0 7px currentColor}
+  .lrow .ln{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lrow .lc{color:var(--dim);font-size:9.5px}
+  .lrow .lod{color:var(--good);font-size:9px;letter-spacing:.02em;min-width:34px;text-align:right}
+  .lrow.off{opacity:.4}
+  .lrow.off .ln{text-decoration:line-through}
+  #resRow{display:flex;align-items:center;gap:7px;margin:1px 0 7px;font-size:10px;color:var(--dim);letter-spacing:.04em}
+  #resRow input[type=range]{flex:1;accent-color:var(--accent);height:3px;cursor:pointer;min-width:70px}
+  #resRow #resVal{color:var(--good);min-width:34px;text-align:right}
+
+  #stream{position:absolute;right:14px;bottom:84px;z-index:7;font-size:10.5px;color:var(--accent);
+    border:1px solid var(--line);background:rgba(5,7,13,.55);padding:5px 9px;letter-spacing:.06em}
+  #stream:before{content:"⟳ ";display:inline-block;animation:spin 1.1s linear infinite}
+
+  #tools{position:absolute;left:50%;bottom:46px;transform:translateX(-50%);z-index:8;display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
+  .tool{font:inherit;font-size:11px;letter-spacing:.03em;color:var(--dim);cursor:pointer;
+    border:1px solid var(--line);background:rgba(5,7,13,.6);padding:6px 11px;backdrop-filter:blur(6px)}
+  .tool:hover{color:var(--ink)}
+  .tool.on{color:var(--bg);background:var(--accent);border-color:var(--accent);font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- ============ SPECIMEN SELECT ============ -->
+<div id="select">
+  <div class="wrap">
+    <h1><span class="b">CELL</span>DIVE</h1>
+    <div class="tag">
+      Shrink to nanoscale and fly through a real cell. Every specimen below is a genuine FIB-SEM
+      reconstruction from Janelia's <a href="https://openorganelle.janelia.org" target="_blank" rel="noopener">OpenOrganelle</a> /
+      CellMap public archive — pulled live from the open <code>janelia-cosem-datasets</code> bucket.
+      Specimens marked <span style="color:#9dffb0">● real 3D</span> stream their <b>actual segmented
+      organelle meshes</b> (decoded in your browser from the published data); the rest get a
+      procedural stand-in. Pick one to dive in and analyze its organelles.
+    </div>
+    <div id="bar">
+      <input id="search" placeholder="search specimens…  (hela, liver, neuron, fly, kidney…)" autocomplete="off"/>
+      <div class="chip on" id="realToggle">● real 3D only</div>
+    </div>
+    <div id="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
+    <div id="status">connecting to OpenOrganelle archive…</div>
+    <div id="grid"></div>
+  </div>
+</div>
+
+<!-- ============ GAME ============ -->
+<div id="game" class="hidden">
+  <div id="app"></div>
+
+  <div id="cross"></div>
+  <div id="scanbar"><i></i></div>
+  <div id="flash"></div>
+
+  <div id="hud-top" class="panel">
+    <h1><span id="specId">specimen</span><span class="exit" id="exitBtn">✕ exit</span></h1>
+    <div class="sub" id="specWho">—</div>
+    <div class="sub" id="specSrc" style="color:#7fe7ff;margin-top:3px">—</div>
+    <div class="stats">
+      <div class="row"><span class="k">depth</span><span class="v" id="depth">—</span></div>
+      <div class="row"><span class="k">speed</span><span class="v" id="speed">—</span></div>
+      <div class="row"><span class="k">analyzed</span><span class="v" id="found">0 / 0</span></div>
+    </div>
+  </div>
+
+  <div id="layers" class="panel">
+    <div class="lhead">layers <span id="lhint">click to toggle</span></div>
+    <div id="resRow"><span>detail</span><input type="range" id="resSlider" min="1" max="6" value="6"><span id="resVal">full</span></div>
+    <div id="layersBody"></div>
+  </div>
+
+  <div id="obj" class="panel">
+    <div class="label">objective · analyze</div>
+    <div class="name" id="objName">—</div>
+    <div id="comp"><div class="ball" id="compBall"><i id="compDot"></i></div><span class="dist" id="compDist">—</span></div>
+    <div class="hint" id="objHint">fly toward the marker, then hold <b style="color:#dfe9f5">SPACE</b> to analyze</div>
+  </div>
+
+  <div id="card" class="panel">
+    <div class="ct"><span id="cardTitle">—</span><span class="cx" id="cardClose">✕</span></div>
+    <div class="cd" id="cardDesc">—</div>
+    <div class="seg" id="cardSeg">—</div>
+  </div>
+
+  <div id="stream" class="hidden">streaming higher detail…</div>
+
+  <div id="tools">
+    <button class="tool" id="tCargo">🎯 cargo run</button>
+    <button class="tool" id="tNarr">🔊 narration</button>
+    <button class="tool" id="tTour">🧭 take the tour</button>
+    <button class="tool" id="tAmb">🎵 ambience</button>
+    <button class="tool on" id="tColor">🎨 unique colors</button>
+    <button class="tool" id="tShadow">☀️ shadows</button>
+    <button class="tool" id="tView">🚌 bus view</button>
+  </div>
+
+  <div id="help" class="panel">
+    <b>WASD</b> fly · <b>drag</b> look · <b>R/F</b> up·down · <b>Shift</b> boost · <b>scroll</b> torch · <b>SPACE</b> analyze &nbsp;|&nbsp; <b>G</b> cargo run · <b>T</b> tour · <b>M</b> ambience · <b>V</b> view · <b>N</b> narrate · <b>C</b> colors · <b>H</b> shadows
+  </div>
+
+  <div id="win">
+    <div class="box">
+      <h2>SPECIMEN MAPPED</h2>
+      <p id="winText">You analyzed every organelle class in this reconstruction.</p>
+      <p style="color:#7fe7ff">This is real, public science data — explore the full volume in the actual viewer.</p>
+      <div class="btns">
+        <a class="btn p" id="winOpen" href="#" target="_blank" rel="noopener">Open in OpenOrganelle ↗</a>
+        <button class="btn" id="winAgain">Dive another specimen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading" class="hidden"><div class="ring"></div><span>descending into specimen…</span></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://www.gstatic.com/draco/v1/decoders/draco_decoder.js"></script>
+<script>
+(function(){
+"use strict";
+
+// ===================================================================
+//  DATA LAYER  — real OpenOrganelle / CellMap public archive
+// ===================================================================
+const BUCKET = "https://janelia-cosem-datasets.s3.amazonaws.com";
+const VIEWER = "https://openorganelle.janelia.org/datasets/";
+
+// Baked-in fallback catalog (used if the live S3 listing can't be reached,
+// e.g. offline or CORS-blocked iframe). These are the real dataset ids.
+const FALLBACK_IDS = ["aic_desmosome-1","aic_desmosome-2","aic_desmosome-3","cam_hum-airway-14500","cam_hum-airway-14771-b","jrc_ccl81-covid-1","jrc_choroid-plexus-2","jrc_cos7-11","jrc_cos7-1a","jrc_cos7-1b","jrc_ctl-id8-1","jrc_ctl-id8-2","jrc_ctl-id8-3","jrc_ctl-id8-4","jrc_ctl-id8-5","jrc_dauer-larva","jrc_fly-acc-calyx-1","jrc_fly-ellipsoid-body","jrc_fly-fsb-1","jrc_fly-fsb-2","jrc_fly-larva-1","jrc_fly-mb-1a","jrc_fly-mb-z0419-20","jrc_fly-protocerebral-bridge","jrc_fly-vnc-1","jrc_hela-1","jrc_hela-2","jrc_hela-21","jrc_hela-22","jrc_hela-3","jrc_hela-4","jrc_hela-bfa","jrc_hela-h89-1","jrc_hela-h89-2","jrc_hela-nz-1","jrc_hela-nz-2","jrc_hum-airway-14953vc","jrc_jurkat-1","jrc_macrophage-2","jrc_mus-cerebellum-4","jrc_mus-cerebellum-5","jrc_mus-choroid-plexus-3","jrc_mus-cortex-3","jrc_mus-dorsal-striatum-2","jrc_mus-dorsal-striatum","jrc_mus-duodenum-1a","jrc_mus-epididymis-1","jrc_mus-epididymis-2","jrc_mus-granule-neurons-1","jrc_mus-granule-neurons-2","jrc_mus-granule-neurons-3","jrc_mus-guard-hair-follicle","jrc_mus-heart-1","jrc_mus-hippocampus-1","jrc_mus-hippocampus-2","jrc_mus-hippocampus-3","jrc_mus-kidney-2","jrc_mus-kidney-3","jrc_mus-kidney-glomerulus-2","jrc_mus-kidney","jrc_mus-liver-2","jrc_mus-liver-3","jrc_mus-liver-4","jrc_mus-liver-5","jrc_mus-liver-6","jrc_mus-liver-7","jrc_mus-liver-zon-1","jrc_mus-liver-zon-2","jrc_mus-liver","jrc_mus-lung-2a","jrc_mus-meissner-corpuscle-1","jrc_mus-meissner-corpuscle-2","jrc_mus-nacc-1","jrc_mus-nacc-2","jrc_mus-nacc-3","jrc_mus-nacc-4","jrc_mus-pacinian-corpuscle","jrc_mus-pancreas-1","jrc_mus-pancreas-2","jrc_mus-pancreas-3","jrc_mus-pancreas-4","jrc_mus-salivary-1","jrc_mus-sc-zp104a","jrc_mus-sc-zp105a","jrc_mus-skel-muscle-1","jrc_mus-skin-1","jrc_mus-skin-2a","jrc_mus-thymus-1","jrc_mus-thymus-2a","jrc_sum159-1","jrc_sum159-4","jrc_ut21-1413-003","jrc_zf-cardiac-1"];
+
+// Decode a dataset id into a friendly description + a biological "profile"
+// that decides which organelles populate the dive.
+function describe(id){
+  const s = id.toLowerCase();
+  const has = (...w)=>w.some(x=>s.includes(x));
+  let organism = "—", tissue = "cell", kind = "cell";
+
+  if(has("hela")) { organism="Human"; tissue="HeLa (cervical cancer)"; }
+  else if(has("cos7")){ organism="Monkey"; tissue="COS-7 kidney"; }
+  else if(has("jurkat")){ organism="Human"; tissue="Jurkat T-cell"; }
+  else if(has("macrophage")){ organism="Mouse"; tissue="macrophage"; }
+  else if(has("sum159")){ organism="Human"; tissue="SUM159 breast cancer"; }
+  else if(has("ctl-id8")){ organism="Mouse"; tissue="cytotoxic T-cell / ID8"; }
+  else if(has("covid","ccl81")){ organism="Monkey"; tissue="SARS-CoV-2 infected Vero"; }
+  else if(has("desmosome")){ organism="—"; tissue="desmosome junction"; }
+  else organism = has("mus")?"Mouse":has("fly")?"Fruit fly":has("zf")?"Zebrafish":has("hum","airway")?"Human":has("dauer")?"C. elegans":"—";
+
+  if(has("liver")){ tissue="liver (hepatocyte)"; kind="liver"; }
+  else if(has("muscle","skel-muscle")){ tissue="skeletal muscle"; kind="muscle"; }
+  else if(has("heart","cardiac")){ tissue="cardiac muscle"; kind="muscle"; }
+  else if(has("cerebellum","cortex","hippocampus","striatum","nacc","granule-neuron","fly-","dauer","calyx","ellipsoid","fsb","protocerebral","vnc","mb-")){ kind="neuron"; if(tissue==="cell") tissue="neural tissue"; }
+  else if(has("kidney")){ tissue="kidney"; kind="tissue"; }
+  else if(has("pancreas")){ tissue="pancreas"; kind="tissue"; }
+  else if(has("salivary")){ tissue="salivary gland"; kind="tissue"; }
+  else if(has("airway","lung")){ tissue="airway / lung"; kind="tissue"; }
+  else if(has("skin","hair-follicle")){ tissue="skin"; kind="tissue"; }
+  else if(has("pacinian","meissner")){ tissue="mechanoreceptor"; kind="neuron"; }
+  else if(has("choroid-plexus")){ tissue="choroid plexus"; kind="tissue"; }
+  else if(has("thymus")){ tissue="thymus"; kind="tissue"; }
+  else if(has("epididymis")){ tissue="epididymis"; kind="tissue"; }
+  else if(has("duodenum")){ tissue="duodenum"; kind="tissue"; }
+
+  // treatment annotations (HeLa perturbations)
+  let note = "";
+  if(has("-bfa")) note="brefeldin-A treated";
+  else if(has("-nz")) note="nocodazole treated";
+  else if(has("-h89")) note="H89 treated";
+  else if(has("covid")) note="SARS-CoV-2 infected";
+  else if(has("zon")) note="zonation series";
+
+  return { id, organism, tissue, kind, note };
+}
+
+const KIND_LABEL = { cell:"cell", liver:"liver", muscle:"muscle", neuron:"neural", tissue:"tissue" };
+
+// ===================================================================
+//  ORGANELLE KNOWLEDGE BASE  (real biology; "seg" = what CellMap segments)
+// ===================================================================
+const ORG = {
+  nucleus:{ name:"Nucleus", color:0xffb25a, emissive:0x6e3a08,
+    desc:"The cell's command center — a double-membraned vault holding the genome (~2 m of DNA folded into ~6 µm). Nuclear pores stud the envelope, gating every molecule in or out.",
+    seg:"CellMap segments <b>nucleus</b>, <b>nuclear envelope</b>, <b>nucleolus</b>, and even euchromatin vs. heterochromatin." },
+  nucleolus:{ name:"Nucleolus", color:0xff8a4a, emissive:0x5a2400,
+    desc:"A dense blob inside the nucleus where ribosomes are manufactured. Not membrane-bound — it's a liquid-like condensate of RNA and protein.",
+    seg:"Segmented as <b>nucleolus</b>, distinct from surrounding chromatin." },
+  mito:{ name:"Mitochondrion", color:0xff5fa8, emissive:0x5e0d33,
+    desc:"The powerhouse. Its folded inner membrane (cristae) runs the electron transport chain to make ATP. Carries its own circular DNA — a relic of an ancient engulfed bacterium.",
+    seg:"CellMap resolves the <b>outer membrane</b>, the inner-membrane <b>cristae</b>, and the matrix separately — a flagship target." },
+  er:{ name:"Endoplasmic reticulum", color:0x4fd6c8, emissive:0x09433c,
+    desc:"A vast continuous sheet-and-tubule network webbing the cytoplasm. Rough ER (ribosome-coated) builds membrane proteins; smooth ER makes lipids and buffers calcium.",
+    seg:"Segmented as <b>ER</b> membrane plus <b>ER exit sites (ERES)</b> where cargo buds off toward the Golgi." },
+  golgi:{ name:"Golgi apparatus", color:0xc8a8ff, emissive:0x33155a,
+    desc:"Stacked, curved cisternae that act as the cell's post office — receiving proteins from the ER, modifying them with sugars, sorting and shipping them in vesicles.",
+    seg:"The flattened <b>Golgi</b> stacks are segmented as distinct cisternae." },
+  lysosome:{ name:"Lysosome", color:0xb888ff, emissive:0x2c0f55,
+    desc:"The recycling furnace — an acidic (pH ~4.5) sac of hydrolytic enzymes that digests worn-out organelles, engulfed material, and macromolecules into reusable parts.",
+    seg:"Segmented as <b>lysosome</b> / endo-lysosomal bodies, often grouped with dense multivesicular bodies." },
+  endosome:{ name:"Endosome", color:0x8fd0ff, emissive:0x10334f,
+    desc:"Sorting stations for material taken in from outside the cell. Early endosomes triage cargo; late endosomes mature toward lysosomes, frequently as multivesicular bodies.",
+    seg:"Segmented as <b>endosome</b> and <b>multivesicular body</b> classes." },
+  peroxisome:{ name:"Peroxisome", color:0xffe06b, emissive:0x5a4400,
+    desc:"A small oxidative organelle that breaks down fatty acids and neutralizes hydrogen peroxide with catalase. Especially abundant in liver and kidney cells.",
+    seg:"Segmented as <b>peroxisome</b> — small and numerous, a test of resolution." },
+  vesicle:{ name:"Transport vesicle", color:0x9dffb0, emissive:0x0e4a23,
+    desc:"Tiny membrane bubbles ferrying cargo between compartments. Coated vesicles (clathrin, COPI/II) pinch off donor membranes and fuse with their target.",
+    seg:"Segmented as <b>vesicle</b> populations; clathrin coats are visible at high resolution." },
+  ribosome:{ name:"Ribosome cluster", color:0xfff0a0, emissive:0x4a4010,
+    desc:"Molecular machines (~25 nm) that translate mRNA into protein. Free in the cytosol or studding the rough ER; often grouped into spiral polysomes.",
+    seg:"CellMap detects <b>ribosome</b> density — among the smallest segmented features." },
+  microtubule:{ name:"Microtubule", color:0x7fe7ff, emissive:0x123b4a,
+    desc:"Hollow protein tubes ~25 nm wide forming the cell's railways and scaffolding. Motor proteins haul cargo along them; they build the mitotic spindle and axonal tracks.",
+    seg:"Segmented as <b>microtubule</b> filaments — long, thin, and directional." },
+  synvesicle:{ name:"Synaptic vesicles", color:0x9dffe0, emissive:0x0e4a3a,
+    desc:"Clustered neurotransmitter packets at a synapse. On a nerve impulse they fuse with the presynaptic membrane and release their chemical signal across the cleft.",
+    seg:"Segmented as <b>synaptic vesicle</b> clouds, with the active zone and synaptic cleft." },
+  glycogen:{ name:"Glycogen granules", color:0xffcaa0, emissive:0x4a2a10,
+    desc:"Dense rosettes of stored sugar. The liver hoards glycogen as a glucose battery, dumping it into the blood between meals to keep you running.",
+    seg:"Segmented as <b>glycogen</b> — punctate, high-density, clustered." },
+  lipid:{ name:"Lipid droplet", color:0xffe89a, emissive:0x4a3a10,
+    desc:"A globe of neutral fat wrapped in a single phospholipid layer — the cell's energy and membrane-building reserve. Liver and fat cells carry the largest ones.",
+    seg:"Segmented as <b>lipid droplet</b> — smooth spheres of stored lipid." },
+  structure:{ name:"Annotated structure", color:0x9ad0ff, emissive:0x16314a,
+    desc:"A structure from this dataset's hand-labeled ground-truth crop — the expert annotations CellMap trains its automated segmentations against.",
+    seg:"From the <b>ground-truth</b> layer: each colour is a separately-labeled object." },
+};
+
+// Which organelles populate each cell-kind dive, with how many to scatter.
+const PROFILES = {
+  cell:   [["nucleus",1],["nucleolus",1],["mito",4],["er",1],["golgi",1],["lysosome",2],["endosome",2],["vesicle",6]],
+  liver:  [["nucleus",1],["mito",6],["er",1],["peroxisome",4],["glycogen",5],["lipid",3],["lysosome",1]],
+  muscle: [["nucleus",1],["mito",7],["er",1],["lipid",2],["vesicle",4]],
+  neuron: [["nucleus",1],["mito",4],["er",1],["golgi",1],["synvesicle",3],["microtubule",5],["lysosome",1]],
+  tissue: [["nucleus",1],["nucleolus",1],["mito",4],["er",1],["golgi",1],["lysosome",2],["vesicle",5]],
+};
+
+// ===================================================================
+//  SPECIMEN SELECT SCREEN
+// ===================================================================
+const selEl = document.getElementById('select');
+const gridEl = document.getElementById('grid');
+const statusEl = document.getElementById('status');
+const searchEl = document.getElementById('search');
+const filtersEl = document.getElementById('filters');
+
+let CATALOG = [];      // [{id, organism, tissue, kind, note}]
+let activeFilter = "all";
+let realOnly = true;   // default: only show specimens that have real 3D meshes
+let probeDone = false;
+const meshAvail = {};  // id -> true once we confirm it has loadable organelle meshes
+
+function buildFilters(){
+  const kinds = ["all", ...Object.keys(KIND_LABEL)];
+  filtersEl.innerHTML = "";
+  kinds.forEach(k=>{
+    const c = document.createElement('div');
+    c.className = "chip" + (k===activeFilter?" on":"");
+    c.textContent = k==="all" ? "all" : KIND_LABEL[k];
+    c.onclick = ()=>{ activeFilter=k; buildFilters(); renderGrid(); };
+    filtersEl.appendChild(c);
+  });
+}
+
+function renderGrid(){
+  const q = searchEl.value.trim().toLowerCase();
+  const probed = Object.keys(meshAvail).length;
+  const list = CATALOG.filter(d=>{
+    if(realOnly && !meshAvail[d.id]) return false;
+    if(activeFilter!=="all" && d.kind!==activeFilter) return false;
+    if(q && !(d.id+" "+d.organism+" "+d.tissue+" "+d.note).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  statusEl.textContent = realOnly
+    ? `${list.length} specimens with real 3D meshes${probeDone?"":" · scanning archive…"}`
+    : `${list.length} specimen${list.length===1?"":"s"} · live from the public janelia-cosem-datasets archive`;
+  gridEl.innerHTML = "";
+  list.forEach(d=>{
+    const card = document.createElement('div');
+    card.className = "card";
+    const who = d.organism!=="—" ? d.organism + " · " + d.tissue : d.tissue;
+    card.innerHTML =
+      `<div class="thumb" style="background-image:url('${BUCKET}/${d.id}/thumbnail.jpg')"></div>
+       <span class="kind">${KIND_LABEL[d.kind]}</span>
+       ${meshAvail[d.id]?'<span class="real">● real 3D</span>':''}
+       <div class="meta">
+         <div class="id">${d.id}</div>
+         <div class="who">${who}${d.note?` · <span style="color:#ffd27f">${d.note}</span>`:""}</div>
+       </div>
+       <span class="go">dive ↘</span>`;
+    card.onclick = ()=>startDive(d);
+    gridEl.appendChild(card);
+  });
+}
+
+async function loadCatalog(){
+  buildFilters();
+  let ids = null;
+  try{
+    const res = await fetch(`${BUCKET}/?list-type=2&delimiter=/`, {cache:"force-cache"});
+    if(res.ok){
+      const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+      // each top-level dataset folder appears as a <CommonPrefixes><Prefix>id/</Prefix>
+      const cp = [...xml.getElementsByTagName("CommonPrefixes")].map(n=>{
+        const p = n.getElementsByTagName("Prefix")[0]; return p?p.textContent.replace(/\/$/,""):null;
+      }).filter(Boolean);
+      if(cp.length) ids = cp;
+    }
+  }catch(e){ /* offline / CORS — fall through to fallback */ }
+
+  if(!ids || !ids.length){
+    ids = FALLBACK_IDS;
+    statusEl.textContent = "showing cached catalog (live archive unreachable)";
+  }
+  CATALOG = ids.filter(id=>!/csc-zipped/.test(id)).map(describe);
+  // sort: nicely grouped, cells & common samples first
+  const order = {cell:0, liver:1, neuron:2, muscle:3, tissue:4};
+  CATALOG.sort((a,b)=> (order[a.kind]-order[b.kind]) || a.id.localeCompare(b.id));
+  renderGrid();
+  probeMeshAvailability();   // fill in "real 3D" badges in the background
+}
+
+// In the background, check each specimen for loadable organelle mesh layers and
+// flag it with a badge. Uses listLayers()/MESH_LAYERS from the dive section.
+async function probeMeshAvailability(){
+  const ids = CATALOG.map(d=>d.id);
+  const wanted = new Set([...MESH_LAYERS.map(l=>l.layer), 'groundtruth']);
+  let dirty=false, i=0;
+  async function worker(){
+    while(i<ids.length){
+      const id=ids[i++];
+      try{
+        const layers=await listLayers(id);
+        if(layers && layers.some(l=>wanted.has(l))){ meshAvail[id]=true; dirty=true; }
+      }catch(e){ /* ignore */ }
+    }
+  }
+  const workers=Array.from({length:14}, worker);
+  // re-render periodically so badges appear as they're discovered
+  const timer=setInterval(()=>{ if(dirty){ dirty=false; renderGrid(); } }, 600);
+  await Promise.all(workers);
+  clearInterval(timer);
+  probeDone=true;
+  renderGrid();
+}
+
+searchEl.addEventListener('input', renderGrid);
+document.getElementById('realToggle').addEventListener('click', function(){
+  realOnly=!realOnly; this.classList.toggle('on', realOnly); renderGrid();
+});
+loadCatalog();
+
+// ===================================================================
+//  THE DIVE  (Three.js flythrough, built per specimen)
+// ===================================================================
+const THREE = window.THREE;
+const gameEl = document.getElementById('game');
+const appEl = document.getElementById('app');
+const loadingEl = document.getElementById('loading');
+
+let renderer, scene, camera, headlamp, raf=0;
+let spot=null, spotTarget=null, spotIntensity=2.6;   // controllable forward torch
+let shadowLight=null;                                // scene key light that casts object-on-object shadows
+let bus=null, thirdPerson=false, busRoll=0;          // the school bus + external view
+const playerPos = new THREE.Vector3();               // logical position (camera rides this in 1st person)
+const layerMeshes = {};                              // organelle type -> [meshes], for the ng-style layer panel
+let uniqueColors=true, shadowsOn=false;             // ng-style per-segment colours (on by default); dynamic shadows
+let narrationOn=false, touring=false, tourIdx=0, tourDwell=0;   // Ms. Frizzle narration + guided tour (off by default)
+let segCounter=0;                                    // gives each mesh a stable id for unique colouring
+let ambienceOn=false, audioCtx=null, audioMaster=null, audioPadLP=null, heartTimer=0, pingTimer=0;  // generative cell soundscape
+let questActive=false, questStage=0, questClock=0, questStages=null, questDwell=0;  // Cargo Run
+let marker=null, markerPulse=0;                       // 3D direction marker at the active target
+let targets=[], decor=[], dust;
+let spec=null;
+
+function fbm(x,y,z){
+  return 0.55*Math.sin(x*1.3 + y*0.7)
+       + 0.30*Math.sin(y*1.7 + z*1.1 + 1.7)
+       + 0.18*Math.sin(z*2.1 + x*0.5 + 4.2)
+       + 0.10*Math.sin((x+y+z)*0.9 + 2.1);
+}
+// seeded RNG so a given specimen always lays out the same way
+function mulberry(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0;
+  let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function seedFromId(id){ let h=2166136261; for(let i=0;i<id.length;i++){ h^=id.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0; }
+
+function blob(radius, detail, amp, freq, mat, stretch, rnd){
+  const g = new THREE.SphereGeometry(radius, detail, detail);
+  const p = g.attributes.position, v = new THREE.Vector3();
+  const ph = rnd? rnd()*10 : 0;
+  for(let i=0;i<p.count;i++){
+    v.fromBufferAttribute(p,i);
+    const n = v.clone().normalize();
+    const d = 1 + amp * fbm(n.x*freq+ph, n.y*freq+ph, n.z*freq);
+    v.multiplyScalar(d);
+    p.setXYZ(i,v.x,v.y,v.z);
+  }
+  g.computeVertexNormals(); g.computeBoundingSphere();
+  const m = new THREE.Mesh(g, mat);
+  if(stretch) m.scale.set(stretch.x,stretch.y,stretch.z);
+  return m;
+}
+function omat(color, emissive, opacity){
+  return new THREE.MeshStandardMaterial({
+    color, emissive, emissiveIntensity:0.6, roughness:0.5, metalness:0.0,
+    transparent: opacity!==undefined, opacity: opacity===undefined?1:opacity,
+    side: THREE.DoubleSide, flatShading:false });
+}
+
+const CELL_R = 100;
+
+// ===================================================================
+//  REAL MESH LOADER — neuroglancer_multilod_draco, decoded in-browser
+//  Pulls genuine FIB-SEM organelle meshes from the public bucket and
+//  drops them into the dive in their true relative spatial arrangement.
+// ===================================================================
+
+// which mesh layers we surface, mapped to organelle type + how many of
+// the largest segments to pull. (layer names as used in the cosem bucket)
+const MESH_LAYERS = [
+  {layer:"nucleus_seg",   type:"nucleus",     count:8},
+  {layer:"mito_seg",      type:"mito",        count:10},
+  {layer:"er_seg",        type:"er",          count:2},
+  {layer:"golgi_seg",     type:"golgi",       count:3},
+  {layer:"endo_seg",      type:"endosome",    count:6},
+  {layer:"lyso_seg",      type:"lysosome",    count:6},
+  {layer:"vesicle_seg",   type:"vesicle",     count:12},
+  {layer:"mt-out_seg",    type:"microtubule", count:8},
+  {layer:"mt_seg",        type:"microtubule", count:8},
+  {layer:"perox_seg",     type:"peroxisome",  count:8},
+  {layer:"ld_seg",        type:"lipid",       count:5},
+  {layer:"ribo_seg",      type:"ribosome",    count:6},
+];
+const TYPE_PRIORITY = {nucleus:0,mito:1,er:2,golgi:3,lysosome:4,endosome:5,peroxisome:6,lipid:7,microtubule:8,vesicle:9,ribosome:10,structure:11};
+
+let _draco=null;
+function ensureDraco(){
+  if(_draco) return _draco;
+  _draco = new Promise((res,rej)=>{
+    if(typeof DracoDecoderModule==="undefined"){ rej(new Error("draco script not loaded")); return; }
+    try{ DracoDecoderModule({ onModuleLoaded:m=>res(m) }); }catch(e){ rej(e); }
+  });
+  return _draco;
+}
+
+async function s3list(prefix){
+  const r = await fetch(`${BUCKET}/?list-type=2&prefix=${encodeURIComponent(prefix)}&delimiter=/`, {cache:"force-cache"});
+  if(!r.ok) return null;
+  return new DOMParser().parseFromString(await r.text(), "text/xml");
+}
+async function listChildren(prefix){   // last path-segment names of the CommonPrefixes under `prefix`
+  const xml = await s3list(prefix);
+  if(!xml) return [];
+  return [...xml.getElementsByTagName("CommonPrefixes")].map(n=>{
+    const p=n.getElementsByTagName("Prefix")[0]; if(!p) return null;
+    const parts=p.textContent.replace(/\/$/,"").split("/"); return parts[parts.length-1];
+  }).filter(Boolean);
+}
+async function listLayers(id){ return listChildren(`${id}/neuroglancer/mesh/`); }
+// every instance id in a layer, read cheaply from its segment_properties (one fetch, even for 16k)
+async function allSegmentIds(id, layer){
+  try{
+    const r=await fetch(`${BUCKET}/${id}/neuroglancer/mesh/${layer}/segment_properties/info`,{cache:"force-cache"});
+    if(!r.ok) return null;
+    const d=await r.json(); const ids=d&&d.inline&&d.inline.ids;
+    return (ids&&ids.length)?ids:null;
+  }catch(e){ return null; }
+}
+async function listSegments(id, layer){
+  const prefix=`${id}/neuroglancer/mesh/${layer}/`;
+  const xml = await s3list(prefix);
+  if(!xml) return [];
+  const out=[];
+  for(const c of xml.getElementsByTagName("Contents")){
+    const key=c.getElementsByTagName("Key")[0].textContent;
+    const name=key.slice(prefix.length);
+    if(/^\d+$/.test(name)){  // a data file (its manifest is name+'.index')
+      const size=parseInt(c.getElementsByTagName("Size")[0].textContent,10)||0;
+      out.push({id:name, size});
+    }
+  }
+  return out;
+}
+
+// parse the unsharded multiresolution mesh manifest (.index)
+function parseManifest(buf){
+  const dv=new DataView(buf); let o=0;
+  const f=()=>{const v=dv.getFloat32(o,true);o+=4;return v;};
+  const u=()=>{const v=dv.getUint32(o,true);o+=4;return v;};
+  const chunk_shape=[f(),f(),f()], grid_origin=[f(),f(),f()];
+  const num_lods=u();
+  const lod_scales=[]; for(let i=0;i<num_lods;i++) lod_scales.push(f());
+  const vertex_offsets=[]; for(let i=0;i<num_lods;i++) vertex_offsets.push([f(),f(),f()]);
+  const nfpl=[]; for(let i=0;i<num_lods;i++) nfpl.push(u());
+  const lods=[]; let cur=0;
+  for(let l=0;l<num_lods;l++){
+    const nf=nfpl[l], xs=[],ys=[],zs=[];
+    for(let i=0;i<nf;i++) xs.push(u());
+    for(let i=0;i<nf;i++) ys.push(u());
+    for(let i=0;i<nf;i++) zs.push(u());
+    const frags=[];
+    for(let i=0;i<nf;i++){ const size=u(); frags.push({pos:[xs[i],ys[i],zs[i]],size,byteStart:cur}); cur+=size; }
+    lods.push({lod:l,nf,frags});
+  }
+  return {chunk_shape,grid_origin,num_lods,lod_scales,vertex_offsets,lods};
+}
+
+function dracoDecode(draco, arrayBuf){
+  const dec=new draco.Decoder(), db=new draco.DecoderBuffer();
+  const i8=new Int8Array(arrayBuf); db.Init(i8,i8.length);
+  if(decoderType(draco,dec,db)!==draco.TRIANGULAR_MESH){ draco.destroy(db); draco.destroy(dec); return null; }
+  const mesh=new draco.Mesh();
+  if(!dec.DecodeBufferToMesh(db,mesh).ok()){ draco.destroy(mesh);draco.destroy(db);draco.destroy(dec); return null; }
+  const nP=mesh.num_points(), nF=mesh.num_faces();
+  const pa=dec.GetAttribute(mesh, dec.GetAttributeId(mesh,draco.POSITION));
+  const arr=new draco.DracoFloat32Array(); dec.GetAttributeFloatForAllPoints(mesh,pa,arr);
+  const pos=new Float32Array(nP*3); for(let i=0;i<nP*3;i++) pos[i]=arr.GetValue(i);
+  const idx=new Uint32Array(nF*3); const ia=new draco.DracoInt32Array();
+  for(let fc=0;fc<nF;fc++){ dec.GetFaceFromMesh(mesh,fc,ia); idx[fc*3]=ia.GetValue(0); idx[fc*3+1]=ia.GetValue(1); idx[fc*3+2]=ia.GetValue(2); }
+  draco.destroy(arr); draco.destroy(ia); draco.destroy(mesh); draco.destroy(db); draco.destroy(dec);
+  return {pos,idx,nP};
+}
+function decoderType(draco,dec,db){ return dec.GetEncodedGeometryType(db); }
+
+// per-segment metadata (info + manifest), cached so LOD swaps never refetch them
+const _infoCache={}, _manCache={};
+async function meshMeta(id, layer, seg){
+  const base=`${BUCKET}/${id}/neuroglancer/mesh/${layer}`;
+  if(!_infoCache[base]) _infoCache[base]=await (await fetch(`${base}/info`,{cache:"force-cache"})).json();
+  const info=_infoCache[base];
+  if(info && info['@type']==='neuroglancer_legacy_mesh') return {base, seg, info, legacy:true};
+  const mkey=base+"/"+seg;
+  if(!_manCache[mkey]) _manCache[mkey]=parseManifest(await (await fetch(`${base}/${seg}.index`,{cache:"force-cache"})).arrayBuffer());
+  return {base, seg, info, man:_manCache[mkey]};
+}
+function coarsestLOD(man){ let L=man.num_lods-1; while(L>0 && man.lods[L].frags.every(f=>f.size===0)) L--; return L; }
+function lodBytes(man, L){ return man.lods[L].frags.reduce((s,f)=>s+f.size,0); }
+
+// decode ONE level of detail of a segment -> {posNm:Float32Array, idx:number[]}.
+// Like neuroglancer, each LOD's fragments are octree chunks; here we pull the whole
+// level's chunk span in one Range request and decode the Draco fragments in it.
+// legacy single-resolution mesh (ground-truth crops): manifest <seg>:0 -> fragment files,
+// each = uint32 numVertices · float32[3n] positions (nm) · uint32[...] indices. No Draco.
+async function loadLegacy(meta){
+  const {base, seg}=meta;
+  let frags=['./'+seg];
+  try{ const mf=await (await fetch(`${base}/${seg}:0`,{cache:"force-cache"})).json(); if(mf&&mf.fragments&&mf.fragments.length) frags=mf.fragments; }catch(e){}
+  const posNm=[], idx=[]; let vbase=0;
+  for(const fr of frags){
+    const url = fr.indexOf('./')===0 ? `${base}/${fr.slice(2)}` : `${base}/${fr}`;
+    const buf = await (await fetch(url,{cache:"force-cache"})).arrayBuffer();
+    if(buf.byteLength<4) continue;
+    const dv=new DataView(buf); const nV=dv.getUint32(0,true); let o=4;
+    for(let i=0;i<nV*3;i++){ posNm.push(dv.getFloat32(o,true)); o+=4; }
+    const nIdx=Math.floor((buf.byteLength-o)/4); for(let i=0;i<nIdx;i++){ idx.push(dv.getUint32(o,true)+vbase); o+=4; }
+    vbase+=nV;
+  }
+  return posNm.length ? {posNm:new Float32Array(posNm), idx} : null;
+}
+async function loadLOD(draco, meta, L){
+  if(meta.legacy) return loadLegacy(meta);
+  const {base, seg, info, man}=meta, bits=info.vertex_quantization_bits, T=info.transform;
+  const frags=man.lods[L].frags.filter(f=>f.size>0);
+  if(!frags.length) return null;
+  const start=frags[0].byteStart, end=frags[frags.length-1].byteStart+frags[frags.length-1].size-1;
+  const data=await (await fetch(`${base}/${seg}`,{headers:{Range:`bytes=${start}-${end}`}})).arrayBuffer();
+  const q=Math.pow(2,bits)-1, posNm=[], idx=[]; let vbase=0;
+  for(const fr of frags){
+    const local=fr.byteStart-start;
+    const dec=dracoDecode(draco, data.slice(local,local+fr.size));
+    if(!dec||!dec.nP) continue;
+    for(let i=0;i<dec.nP;i++){
+      const mx=man.grid_origin[0]+man.vertex_offsets[L][0]+man.chunk_shape[0]*Math.pow(2,L)*(fr.pos[0]+dec.pos[i*3]/q);
+      const my=man.grid_origin[1]+man.vertex_offsets[L][1]+man.chunk_shape[1]*Math.pow(2,L)*(fr.pos[1]+dec.pos[i*3+1]/q);
+      const mz=man.grid_origin[2]+man.vertex_offsets[L][2]+man.chunk_shape[2]*Math.pow(2,L)*(fr.pos[2]+dec.pos[i*3+2]/q);
+      posNm.push(T[0]*mx+T[1]*my+T[2]*mz+T[3], T[4]*mx+T[5]*my+T[6]*mz+T[7], T[8]*mx+T[9]*my+T[10]*mz+T[11]);
+    }
+    for(let k=0;k<dec.idx.length;k++) idx.push(dec.idx[k]+vbase);
+    vbase+=dec.nP;
+  }
+  return posNm.length ? {posNm:new Float32Array(posNm), idx} : null;
+}
+
+async function pool(items, n, fn){
+  const out=new Array(items.length); let i=0;
+  async function worker(){ while(i<items.length){ const k=i++; try{ out[k]=await fn(items[k],k);}catch(e){ out[k]=null; } } }
+  await Promise.all(Array.from({length:Math.min(n,items.length)}, worker));
+  return out;
+}
+
+// ---- dynamic LOD state (neuroglancer-style detail-on-approach) ----
+let currentFit=null;                 // {ctr:[x,y,z], fit} shared nm->game transform for the dive
+let lodLoading=0, lodTimer=0, lodActiveTime=0;
+let resCap=0;                        // finest LOD index the detail slider permits (0 = full res)
+let meshTotalAvail=0;                 // total real segments available across loaded layers (for "N of M")
+const LOD_MAXCONC=4, LOD_BUDGET=6_000_000;   // generous detail budget; cap so the finest never buries the GPU
+
+function buildLODGeometry(posNm, idx){
+  const {ctr, fit}=currentFit;
+  const p=new Float32Array(posNm.length);
+  for(let i=0;i<posNm.length;i+=3){ p[i]=(posNm[i]-ctr[0])*fit; p[i+1]=(posNm[i+1]-ctr[1])*fit; p[i+2]=(posNm[i+2]-ctr[2])*fit; }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(p,3));
+  g.setIndex(idx); g.computeVertexNormals(); g.computeBoundingSphere();
+  return g;
+}
+
+// returns [{type, mesh}] in real relative arrangement, or null if no mesh data
+async function loadRealOrganelles(id, onProgress){
+  const present = await listLayers(id);
+  if(!present || !present.length) return null;
+  let chosen = MESH_LAYERS.filter(l=>present.includes(l.layer));
+  // fallback: datasets whose only meshes are the hand-labeled ground-truth crops
+  // (kidney, sum159, …) — organized as groundtruth/<crop>/<class>/. Load one crop's classes.
+  if(!chosen.length && present.includes('groundtruth')){
+    const GT_MAP={nucleus:'nucleus',nuc:'nucleus',nucleolus:'nucleolus',mito:'mito',er:'er',eres:'er',
+      golgi:'golgi',endo:'endosome',lyso:'lysosome',ld:'lipid',ves:'vesicle',vesicle:'vesicle',
+      mt:'microtubule',ribo:'ribosome',perox:'peroxisome'};
+    const crops = await listChildren(`${id}/neuroglancer/mesh/groundtruth/`);
+    if(crops.length){
+      const crop = crops[0];
+      const classes = await listChildren(`${id}/neuroglancer/mesh/groundtruth/${crop}/`);
+      const seen=new Set();
+      classes.forEach(cl=>{
+        if(/_(lum|mem|all)$/.test(cl)) return;        // skip lumen/membrane sub-variants
+        const type=GT_MAP[cl]; if(!type || seen.has(type)) return; seen.add(type);
+        chosen.push({layer:`groundtruth/${crop}/${cl}`, type, count:3});
+      });
+    }
+  }
+  if(!chosen.length) return null;
+  const draco = await ensureDraco();
+
+  onProgress("indexing real organelle meshes…");
+  const MAX_MESHES=600;                                  // total per dive (fetch + draw-call budget)
+  const perLayerCap = Math.max(40, Math.floor(MAX_MESHES/chosen.length));
+  let jobs=[]; meshTotalAvail=0;
+  for(const cl of chosen){
+    const ids = await allSegmentIds(id, cl.layer);
+    if(ids && ids.length){
+      meshTotalAvail += ids.length;
+      // sample evenly across ALL instances so the whole volume is represented (not just a corner)
+      const want=Math.min(ids.length, perLayerCap), step=ids.length/want;
+      for(let i=0;i<want;i++) jobs.push({cl, seg: ids[Math.floor(i*step)]});
+    } else {
+      const segs=await listSegments(id, cl.layer);       // fallback: object listing (legacy crops)
+      meshTotalAvail += segs.length; segs.sort((a,b)=>b.size-a.size);
+      segs.slice(0, perLayerCap).forEach(s=>jobs.push({cl, seg:s.id}));
+    }
+  }
+  if(!jobs.length) return null;
+
+  let done=0;
+  const loaded = await pool(jobs, 12, async(j)=>{
+    let r=null, meta=null;
+    try{ meta=await meshMeta(id, j.cl.layer, j.seg); meta._L0 = meta.legacy?0:coarsestLOD(meta.man); r=await loadLOD(draco, meta, meta._L0); }
+    catch(e){ r=null; }
+    onProgress(`decoding real meshes… ${++done}/${jobs.length}`);
+    return r ? {type:j.cl.type, posNm:r.posNm, idx:r.idx, meta} : null;
+  });
+  const good=loaded.filter(Boolean);
+  if(!good.length) return null;
+
+  // global fit: shared nm frame -> recenter on combined centroid, scale to play volume
+  let mn=[1e30,1e30,1e30], mx=[-1e30,-1e30,-1e30];
+  for(const o of good){ const p=o.posNm; for(let i=0;i<p.length;i+=3){
+    if(p[i]<mn[0])mn[0]=p[i]; if(p[i]>mx[0])mx[0]=p[i];
+    if(p[i+1]<mn[1])mn[1]=p[i+1]; if(p[i+1]>mx[1])mx[1]=p[i+1];
+    if(p[i+2]<mn[2])mn[2]=p[i+2]; if(p[i+2]>mx[2])mx[2]=p[i+2]; }}
+  const ctr=[(mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2];
+  const ext=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1;
+  currentFit = {ctr, fit:(CELL_R*1.7)/ext};
+
+  const entries=[];
+  for(const o of good){
+    const g=buildLODGeometry(o.posNm, o.idx);
+    const od=ORG[o.type];
+    const mesh=new THREE.Mesh(g, omat(od.color, od.emissive, o.type==="er"?0.55:0.96));
+    mesh.userData.r = g.boundingSphere.radius;
+    mesh.userData.center = g.boundingSphere.center.clone();  // world-space (mesh stays at origin)
+    mesh.userData.real = true;
+    mesh.userData.meta = o.meta;        // {base,seg,info,man,_L0}
+    mesh.userData.lod = o.meta._L0;     // current level of detail (starts coarsest)
+    mesh.userData.loading = false;
+    entries.push({type:o.type, mesh});
+  }
+  return entries;
+}
+
+// choose a target LOD for an organelle from its distance (closer => finer => lower index),
+// clamped so we never go finer than the byte budget. Mirrors ng's projected-size idea.
+function pickLOD(meta, dist, r){
+  const man=meta.man, coarse=meta._L0;
+  let want = Math.round(Math.log2(Math.max(dist,0.01)/Math.max(r*0.6,0.01)));
+  want = Math.min(coarse, Math.max(resCap, want));   // detail slider caps how fine we go (never finer than resCap, never coarser than the coarsest level)
+  while(want<coarse && lodBytes(man,want)>LOD_BUDGET) want++;
+  return want;
+}
+
+// each frame (throttled): refine nearby organelles, coarsen distant ones — one LOD step
+// at a time, nearest first, with a small concurrency cap. This is the streaming loop.
+function manageLOD(dt){
+  if(!currentFit) return;
+  lodTimer-=dt; if(lodTimer>0) return; lodTimer=0.25;
+  const reals=[];
+  targets.forEach(t=>{ if(t.mesh.userData.real) reals.push(t.mesh); });
+  decor.forEach(m=>{ if(m.userData.real) reals.push(m); });
+  reals.forEach(m=>{ m.userData._d=playerPos.distanceTo(m.userData.center); });
+  reals.sort((a,b)=>a.userData._d-b.userData._d);   // nearest first
+  for(const mesh of reals){
+    if(lodLoading>=LOD_MAXCONC) break;
+    const ud=mesh.userData; if(ud.loading || !ud.meta || !ud.meta.man) continue;  // legacy meshes have no LOD pyramid
+    const want=pickLOD(ud.meta, ud._d, ud.r);
+    // hysteresis: refine promptly, but only coarsen when clearly far — avoids thrash/popping
+    if(want < ud.lod) startLODSwap(mesh, ud.lod-1);
+    else if(want > ud.lod+1) startLODSwap(mesh, ud.lod+1);
+  }
+  updateLayerLODs();   // keep the per-layer LOD readouts live
+}
+async function startLODSwap(mesh, L){
+  const ud=mesh.userData, token=diveToken; ud.loading=true; lodLoading++;
+  try{
+    const draco=await ensureDraco();
+    const r=await loadLOD(draco, ud.meta, L);
+    if(token===diveToken && r){
+      const ng=buildLODGeometry(r.posNm, r.idx);
+      const old=mesh.geometry; mesh.geometry=ng; if(old) old.dispose();
+      ud.lod=L; ud.r=ng.boundingSphere.radius; ud.center.copy(ng.boundingSphere.center);
+    }
+  }catch(e){ /* keep current LOD on failure */ }
+  finally{ ud.loading=false; lodLoading=Math.max(0,lodLoading-1); }
+}
+
+// build one organelle mesh for a given type & size, with character
+function makeOrganelle(type, rnd){
+  const o = ORG[type];
+  const m = omat(o.color, o.emissive, type==="er"?0.42:0.95);
+  switch(type){
+    case "nucleus":     return blob(26, 64, 0.10, 1.7, m, null, rnd);
+    case "nucleolus":   return blob(8, 40, 0.18, 2.4, m, null, rnd);
+    case "mito":        return blob(7, 40, 0.22, 2.7, m, {x:2.4+rnd()*0.6,y:0.85,z:0.95}, rnd);
+    case "lysosome":    return blob(5.5, 36, 0.16, 3.0, m, null, rnd);
+    case "endosome":    return blob(5, 32, 0.20, 3.0, m, null, rnd);
+    case "peroxisome":  return blob(3.4, 28, 0.14, 3.2, m, null, rnd);
+    case "lipid":       return blob(6, 40, 0.05, 2.0, m, null, rnd);
+    case "glycogen":  { // rosette: a clump of tiny spheres
+      const g = new THREE.Group(); const bg = new THREE.SphereGeometry(0.7,8,8);
+      for(let i=0;i<14;i++){ const s=new THREE.Mesh(bg,m); s.position.set((rnd()-.5)*4,(rnd()-.5)*4,(rnd()-.5)*4); g.add(s);}
+      g.userData.r=3.2; return g; }
+    case "vesicle":     return blob(2.4, 24, 0.10, 3.0, m, null, rnd);
+    case "ribosome":    return blob(2.0, 18, 0.16, 3.5, m, null, rnd);
+    case "synvesicle":{ const g=new THREE.Group(); const bg=new THREE.SphereGeometry(0.9,10,10);
+      for(let i=0;i<20;i++){ const s=new THREE.Mesh(bg,m); s.position.set((rnd()-.5)*6,(rnd()-.5)*6,(rnd()-.5)*6); g.add(s);}
+      g.userData.r=4; return g; }
+    case "microtubule":{ const len=18+rnd()*16; const t=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,len,10,1,true),m);
+      t.rotation.set(rnd()*3,rnd()*3,rnd()*3); t.userData.r=len*0.5; return t; }
+    case "golgi":     { // stack of flattened curved discs
+      const g=new THREE.Group();
+      for(let i=0;i<5;i++){ const c=new THREE.Mesh(new THREE.TorusGeometry(7-i*0.5,1.4,10,30,Math.PI*1.3),m);
+        c.position.y=i*2.2-4; c.rotation.x=Math.PI/2; c.rotation.z=rnd()*0.4; g.add(c);}
+      g.userData.r=9; return g; }
+    case "er":        { // tangled tubule network
+      const g=new THREE.Group();
+      for(let i=0;i<3;i++){ const k=new THREE.Mesh(new THREE.TorusKnotGeometry(11+i*4,1.0,120,10,2,3),m);
+        k.rotation.set(rnd()*3,rnd()*3,0); g.add(k);}
+      g.userData.r=18; return g; }
+  }
+  return blob(5,32,0.15,3.0,m,null,rnd);
+}
+
+function clearScene(){
+  if(raf) cancelAnimationFrame(raf), raf=0;
+  if(renderer){ renderer.dispose(); if(renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); }
+  scene=null; targets=[]; decor=[]; dust=null; marker=null;
+  currentFit=null; lodLoading=0; lodTimer=0; questActive=false;
+}
+
+function setLoad(msg){ const s=loadingEl.querySelector('span'); if(s) s.textContent=msg; }
+
+let diveToken=0;
+function startDive(d){
+  spec = d;
+  selEl.classList.add('hidden');
+  gameEl.classList.remove('hidden');
+  loadingEl.classList.remove('hidden');
+  setLoad('reading specimen…');
+  setTimeout(()=>buildDive(d), 50);  // let the loader paint first
+}
+
+async function buildDive(d){
+  const token = ++diveToken;   // guard against an earlier dive resolving late
+  clearScene();
+  const rnd = mulberry(seedFromId(d.id));
+  buildScene(d, rnd);
+
+  // try genuine FIB-SEM organelle meshes; fall back to a procedural cell
+  let real=null, dataSource="procedural model · no published meshes";
+  try{
+    real = await Promise.race([
+      loadRealOrganelles(d.id, setLoad),
+      new Promise(r=>setTimeout(()=>r('__timeout'), 40000))
+    ]);
+  }catch(e){ console.warn('real mesh load failed:', e); real=null; }
+  if(token!==diveToken) return;       // user already exited / re-dived
+  if(real==='__timeout'){ console.warn('real mesh load timed out'); real=null; }
+
+  if(real && real.length){
+    addRealOrganelles(real);
+    dataSource = (meshTotalAvail>real.length ? `${real.length} of ${meshTotalAvail.toLocaleString()} real meshes` : `${real.length} real FIB-SEM meshes`)+" · CellMap";
+  } else {
+    populateProcedural(d, rnd);
+  }
+
+  finalizeDive(dataSource);
+  loadingEl.classList.add('hidden');
+  if(!raf) raf = requestAnimationFrame(tick);
+}
+
+// renderer + scene + camera + lights + membrane + dust (common to both modes)
+function buildScene(d, rnd){
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x04060c,1);
+  renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  appEl.appendChild(renderer.domElement);
+
+  scene = new THREE.Scene();
+  const tint = {cell:0x05070d, liver:0x0c0805, neuron:0x05080f, muscle:0x0d0608, tissue:0x070a0d}[d.kind] || 0x05070d;
+  scene.fog = new THREE.FogExp2(tint, 0.006);
+
+  camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.4, 4000);
+  // start at a 3/4 corner angle looking at the centre, so the volume reads as 3D (not a flat face)
+  playerPos.set(58,34,70); camera.position.copy(playerPos);
+  yaw=0.69; pitch=-0.38; vel.set(0,0,0);
+
+  scene.add(new THREE.AmbientLight(0x33415a, 1.0));
+  headlamp = new THREE.PointLight(0xcfe2ff, 0.9, 380, 2);   // soft ambient fill from the diver
+  camera.add(headlamp); scene.add(camera);
+  const rim = new THREE.PointLight(0x4060a0, 0.7, 700); rim.position.set(-130,90,-70); scene.add(rim);
+  const rim2 = new THREE.PointLight(0x903060, 0.45, 700); rim2.position.set(120,-80,60); scene.add(rim2);
+
+  // scene key light (like a sun) — this is what casts organelle-on-organelle shadows.
+  // it's always lit; toggling shadows just turns its shadow-casting on/off.
+  shadowLight = new THREE.DirectionalLight(0xeaf2ff, 0.95);
+  shadowLight.position.set(85,150,70);
+  shadowLight.target.position.set(0,0,0); scene.add(shadowLight.target);
+  shadowLight.castShadow = shadowsOn;
+  shadowLight.shadow.mapSize.set(2048,2048);
+  const sc=shadowLight.shadow.camera; sc.left=-CELL_R; sc.right=CELL_R; sc.top=CELL_R; sc.bottom=-CELL_R; sc.near=1; sc.far=420;
+  shadowLight.shadow.bias=-0.0004; shadowLight.shadow.normalBias=0.4;
+  scene.add(shadowLight);
+
+  // controllable forward torch — a focused beam that lights whatever you look at.
+  // mouse wheel adjusts its intensity (scroll up = brighter).
+  spot = new THREE.SpotLight(0xffffff, spotIntensity, 800, 0.6, 0.55, 0.9);
+  spot.position.set(0,0,0);
+  spotTarget = new THREE.Object3D(); spotTarget.position.set(0,0,-12);
+  camera.add(spot); camera.add(spotTarget); spot.target = spotTarget;
+
+  // plasma membrane (seen from inside)
+  const membrane = blob(CELL_R, 96, 0.13, 1.4, new THREE.MeshStandardMaterial({
+    color:0x21314f, emissive:0x0a1530, emissiveIntensity:0.5, roughness:0.9,
+    side:THREE.BackSide, transparent:true, opacity:0.92}), null, rnd);
+  membrane.receiveShadow=true; scene.add(membrane);
+
+  // floating cytosol dust for parallax
+  dust = new THREE.Group();
+  const dgeo = new THREE.SphereGeometry(0.45,6,6);
+  const dmat = new THREE.MeshBasicMaterial({color:0x6f86ad, transparent:true, opacity:0.45});
+  for(let i=0;i<300;i++){ const dd=new THREE.Mesh(dgeo,dmat);
+    dd.position.set((rnd()-.5)*CELL_R*1.8,(rnd()-.5)*CELL_R*1.8,(rnd()-.5)*CELL_R*1.8); dust.add(dd); }
+  scene.add(dust);
+
+  // the school bus (only shown in the external view; hidden in 1st person)
+  bus = makeBus(); bus.visible = thirdPerson; scene.add(bus);
+
+  // 3D direction marker — a reticle that floats at the active target, visible through anything
+  marker = new THREE.Sprite(new THREE.SpriteMaterial({ map:makeMarkerTexture(),
+    depthTest:false, depthWrite:false, transparent:true, sizeAttenuation:false }));
+  marker.scale.set(0.07,0.07,1); marker.renderOrder=999; marker.visible=false; scene.add(marker);
+}
+function makeMarkerTexture(){
+  const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d');
+  x.strokeStyle='#7fe7ff'; x.lineWidth=4; x.beginPath(); x.arc(32,32,19,0,Math.PI*2); x.stroke();
+  x.lineWidth=3; x.beginPath(); x.arc(32,32,8,0,Math.PI*2); x.stroke();
+  x.beginPath(); x.moveTo(32,1); x.lineTo(32,11); x.moveTo(32,53); x.lineTo(32,63); x.moveTo(1,32); x.lineTo(11,32); x.moveTo(53,32); x.lineTo(63,32); x.stroke();
+  return new THREE.CanvasTexture(c);
+}
+
+// low-poly school bus — front faces -z (the look direction)
+function makeBus(){
+  const g = new THREE.Group();
+  const yellow = new THREE.MeshStandardMaterial({color:0xffc01f, roughness:0.45, metalness:0.1, emissive:0x281c00, emissiveIntensity:0.35});
+  const dark   = new THREE.MeshStandardMaterial({color:0x11141c, roughness:0.4, metalness:0.3, emissive:0x0a1a2a, emissiveIntensity:0.3});
+  const glass  = new THREE.MeshStandardMaterial({color:0x9fd8ff, roughness:0.1, metalness:0.0, transparent:true, opacity:0.55, emissive:0x10283a, emissiveIntensity:0.5});
+  const W=2.6, H=1.9, L=7.2;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(W,H,L), yellow); body.position.y=0.2; g.add(body);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(W*0.9,0.45,L*0.95), yellow); roof.position.y=0.2+H/2+0.22; g.add(roof);
+  // windshield + side windows
+  const wind = new THREE.Mesh(new THREE.BoxGeometry(W*0.82,0.85,0.12), glass); wind.position.set(0,0.65,-L/2-0.01); g.add(wind);
+  const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.7,L*0.78), glass); sideL.position.set(W/2+0.01,0.7,0.2); g.add(sideL);
+  const sideR = sideL.clone(); sideR.position.x=-W/2-0.01; g.add(sideR);
+  // black stripe + bumpers
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(W+0.04,0.25,L*0.99), dark); stripe.position.set(0,-0.25,0); g.add(stripe);
+  const bumperF = new THREE.Mesh(new THREE.BoxGeometry(W+0.12,0.4,0.4), dark); bumperF.position.set(0,-0.7,-L/2); g.add(bumperF);
+  const bumperB = bumperF.clone(); bumperB.position.z=L/2; g.add(bumperB);
+  // wheels
+  const wheelGeo = new THREE.CylinderGeometry(0.55,0.55,0.45,16);
+  [[W/2,-L*0.28],[-W/2,-L*0.28],[W/2,L*0.28],[-W/2,L*0.28]].forEach(([x,z])=>{
+    const w=new THREE.Mesh(wheelGeo, dark); w.rotation.z=Math.PI/2; w.position.set(x,-0.95,z); g.add(w); });
+  // headlights actually light the cell ahead
+  const hl=new THREE.PointLight(0xfff0c8, 0.8, 60); hl.position.set(0,0,-L/2-1); g.add(hl);
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+  return g;
+}
+
+// add genuine decoded meshes; one objective per organelle type (largest), rest scenery
+function addRealOrganelles(entries){
+  const byType={};
+  entries.forEach(e=>{ scene.add(e.mesh); (byType[e.type]=byType[e.type]||[]).push(e.mesh); });
+  Object.keys(byType).sort((a,b)=>(TYPE_PRIORITY[a]??99)-(TYPE_PRIORITY[b]??99)).forEach(type=>{
+    const meshes=byType[type].sort((a,b)=>b.userData.r-a.userData.r);
+    meshes.forEach((mesh,i)=>{
+      mesh.userData.spin=0;  // real geometry is offset from origin — spinning would orbit
+      mesh.userData.type=type; mesh.userData.uid=++segCounter;
+      mesh.castShadow=true; mesh.receiveShadow=true;
+      if(i===0) targets.push({type, name:ORG[type].name, mesh, center:mesh.userData.center, reachR:mesh.userData.r, found:false});
+      else decor.push(mesh);
+    });
+  });
+}
+
+// procedural stand-in cell, populated from the specimen's biological profile
+function populateProcedural(d, rnd){
+  const profile = PROFILES[d.kind] || PROFILES.cell;
+  const seenTypes = new Set();
+  profile.forEach(([type,count])=>{
+    for(let i=0;i<count;i++){
+      const mesh = makeOrganelle(type, rnd);
+      let pos;
+      do { pos = new THREE.Vector3((rnd()-.5),(rnd()-.5),(rnd()-.5)).multiplyScalar(CELL_R*1.4);
+      } while(pos.length()>CELL_R-14 || pos.length()<18);
+      if(type==="nucleus") pos.multiplyScalar(0.4);
+      mesh.position.copy(pos);
+      mesh.userData.type = type; mesh.userData.uid = ++segCounter;
+      mesh.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+      mesh.userData.spin = (rnd()-0.5)*0.06;   // gentle; large spin reads as drift
+      if(mesh.userData.r===undefined)
+        mesh.userData.r = mesh.geometry && mesh.geometry.boundingSphere ? mesh.geometry.boundingSphere.radius*Math.max(mesh.scale.x,mesh.scale.y,mesh.scale.z) : 8;
+      scene.add(mesh);
+      if(!seenTypes.has(type)){ seenTypes.add(type);
+        targets.push({type, name:ORG[type].name, mesh, center:mesh.position, reachR:mesh.userData.r, found:false});
+      } else decor.push(mesh);
+    }
+  });
+  if(d.kind==="cell"||d.kind==="tissue"){
+    const rm = omat(ORG.ribosome.color, ORG.ribosome.emissive, 0.9);
+    for(let i=0;i<40;i++){ const r=blob(1.3,12,0.1,3,rm,null,rnd); r.userData.type="ribosome"; r.userData.uid=++segCounter;
+      r.castShadow=true; r.receiveShadow=true;
+      r.position.set((rnd()-.5)*CELL_R*1.5,(rnd()-.5)*CELL_R*1.5,(rnd()-.5)*CELL_R*1.5); scene.add(r); decor.push(r); }
+  }
+}
+
+function finalizeDive(dataSource){
+  const who = spec.organism!=="—" ? spec.organism+" · "+spec.tissue : spec.tissue;
+  ui.specId.textContent = spec.id;
+  ui.specWho.textContent = who + (spec.note?" · "+spec.note:"");
+  ui.specSrc.textContent = dataSource;
+  foundCount=0; objIdx=0;
+  ui.found.textContent = "0 / "+targets.length;
+  document.getElementById('win').classList.remove('show');
+  card.el.classList.remove('show');
+  buildLayerPanel();
+  applyColors();              // honour the unique-colours toggle across dives
+  narratedTypes.clear();
+  touring=false; thirdPerson=false; busRoll=0; questActive=false;
+  setToolStates();
+  nextObjective();
+  if(narrationOn) setTimeout(()=>narrate("Welcome aboard! This is "+spec.id+". Drive up to any organelle and I'll tell you all about it. Or press T to take the tour!"), 400);
+}
+
+// ng-style layer panel: one row per organelle type with its colour, a visibility
+// toggle, and (for real meshes) a live LOD readout that proves multires is working.
+function buildLayerPanel(){
+  for(const k in layerMeshes) delete layerMeshes[k];
+  [...targets.map(t=>t.mesh), ...decor].forEach(m=>{
+    const t=m.userData.type; if(!t) return; (layerMeshes[t]=layerMeshes[t]||[]).push(m);
+  });
+  const types=Object.keys(layerMeshes).sort((a,b)=>(TYPE_PRIORITY[a]??99)-(TYPE_PRIORITY[b]??99));
+  const rows = types.map(type=>{
+    const col='#'+(ORG[type]?ORG[type].color:0x888888).toString(16).padStart(6,'0');
+    const nm=ORG[type]?ORG[type].name:type;
+    const n=layerMeshes[type].length;
+    return `<label class="lrow" data-type="${type}">
+      <input type="checkbox" checked>
+      <span class="sw" style="background:${col}"></span>
+      <span class="ln">${nm}</span>
+      <span class="lc">${n>1?'×'+n:''}</span>
+      <span class="lod" data-type="${type}"></span>
+    </label>`;
+  }).join('');
+  ui.layersBody.innerHTML = rows;
+  ui.layersBody.querySelectorAll('.lrow').forEach(row=>{
+    const type=row.getAttribute('data-type');
+    row.querySelector('input').addEventListener('change', e=>{
+      const vis=e.target.checked; layerMeshes[type].forEach(m=>m.visible=vis); row.classList.toggle('off',!vis);
+    });
+  });
+  updateLayerLODs();
+}
+
+// refresh the per-layer LOD readouts (finest level currently loaded for that type)
+function updateLayerLODs(){
+  if(!ui.layersBody) return;
+  ui.layersBody.querySelectorAll('.lod').forEach(el=>{
+    const type=el.getAttribute('data-type'); const ms=layerMeshes[type]||[];
+    const reals=ms.filter(m=>m.userData.real);
+    if(!reals.length){ el.textContent=''; return; }
+    let fine=99, coarse=0; reals.forEach(m=>{ fine=Math.min(fine,m.userData.lod); coarse=Math.max(coarse,m.userData.meta._L0); });
+    el.textContent = 'LOD '+fine+(fine<coarse?'↓':'');   // ↓ = finer than the coarsest available
+  });
+}
+
+// ===================================================================
+//  COLOURS · SHADOWS · NARRATION · GUIDED TOUR
+// ===================================================================
+
+// ng-style per-segment unique colours, keyed off the REAL neuroglancer segment id so a
+// given segment gets the same stable hue it would in neuroglancer (murmur3 mix → hue).
+function murmur(state, value){
+  value = Math.imul(value, 0xcc9e2d51); value = (value<<15)|(value>>>17);
+  value = Math.imul(value, 0x1b873593);
+  state ^= value; state = (state<<13)|(state>>>19);
+  return (Math.imul(state,5) + 0xe6546b64) | 0;
+}
+function segHue(idNum){
+  let h = murmur(0, idNum & 0xffffffff);
+  h = murmur(h, (idNum/0x100000000) >>> 0);     // high 32 bits (0 for these datasets)
+  h ^= h>>>16; h = Math.imul(h,0x85ebca6b); h ^= h>>>13;   // finalize
+  return ((h>>>0) % 100000) / 100000;
+}
+function colorKey(m){
+  return m.userData.real ? (parseInt(m.userData.meta.seg,10) || m.userData.uid||0) : (m.userData.uid||0);
+}
+function applyColors(){
+  [...targets.map(t=>t.mesh), ...decor].forEach(m=>{
+    const o = ORG[m.userData.type] || {color:0x9aa6b8, emissive:0x14171f};
+    const hue = segHue(colorKey(m));
+    m.traverse(x=>{ if(x.isMesh && x.material){
+      if(uniqueColors){
+        x.material.color.setHSL(hue, 0.72, 0.55);
+        if(x.material.emissive) x.material.emissive.setHSL(hue, 0.72, 0.12);  // glow must match, or the per-type emissive tints everything
+      } else {
+        x.material.color.setHex(o.color);
+        if(x.material.emissive) x.material.emissive.setHex(o.emissive);
+      }
+    }});
+  });
+}
+function toggleShadows(on){
+  shadowsOn = on!==undefined ? on : !shadowsOn;
+  if(shadowLight) shadowLight.castShadow = shadowsOn;   // sun-style light casts object-on-object shadows
+  if(renderer) renderer.shadowMap.needsUpdate = true;
+  setToolStates();
+}
+function toggleColors(on){ uniqueColors = on!==undefined?on:!uniqueColors; applyColors(); setToolStates(); }
+
+// ---- Ms. Frizzle narration via the free, local Web Speech API ----
+const FRIZZ = {
+  nucleus:"the nucleus — the cell's command center! Every instruction for life is stored right inside.",
+  nucleolus:"the nucleolus, hard at work building ribosomes deep inside the nucleus.",
+  mito:"a mitochondrion — a powerhouse of the cell! It's burning fuel to make energy as we speak.",
+  er:"the endoplasmic reticulum — a vast maze of membranes where proteins are folded and born.",
+  golgi:"the Golgi apparatus — the cell's post office, packaging and shipping proteins all over.",
+  lysosome:"a lysosome — the cell's stomach! It digests anything the cell no longer needs.",
+  endosome:"an endosome, sorting the cargo the cell just swallowed from the outside world.",
+  peroxisome:"a peroxisome — it breaks down fats and neutralizes nasty chemicals.",
+  vesicle:"vesicles — tiny bubbles ferrying precious cargo all around the cell.",
+  ribosome:"ribosomes — the protein factories, reading the genetic code letter by letter.",
+  microtubule:"a microtubule — one of the cell's railways! Motor proteins haul cargo right along it.",
+  synvesicle:"synaptic vesicles, packed with neurotransmitters and ready to fire a signal.",
+  glycogen:"glycogen granules — sugar packed away for a rainy day.",
+  lipid:"a lipid droplet — the cell's pantry, storing fat for energy.",
+  structure:"a hand-labeled structure — this is the ground-truth data the scientists annotated themselves!",
+};
+function frizzFor(type){ return "Class, look! That's "+(FRIZZ[type]||("a "+(ORG[type]?ORG[type].name:type)+".")); }
+
+let voices=[], frizzVoice=null;
+function loadVoices(){
+  if(!('speechSynthesis' in window)) return;
+  voices = speechSynthesis.getVoices();
+  frizzVoice = voices.find(v=>/en/i.test(v.lang) && /(samantha|karen|tessa|moira|fiona|female|zira|google us english)/i.test(v.name))
+            || voices.find(v=>/en-US/i.test(v.lang)) || voices.find(v=>/en/i.test(v.lang)) || null;
+}
+if('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged=loadVoices; }
+function speaking(){ return ('speechSynthesis' in window) && speechSynthesis.speaking; }
+function narrate(text){
+  if(!narrationOn || !('speechSynthesis' in window)) return;
+  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text);
+    if(frizzVoice) u.voice=frizzVoice; u.rate=1.04; u.pitch=1.2; u.volume=1; speechSynthesis.speak(u);
+  }catch(e){}
+}
+const narratedTypes = new Set();
+// while exploring freely, narrate each organelle class once as you first get near it
+function proximityNarrate(){
+  if(!narrationOn || touring || questActive || speaking() || objIdx>targets.length) return;
+  for(const t of targets){
+    if(narratedTypes.has(t.type)) continue;
+    const d=playerPos.distanceTo(t.center||t.mesh.position);
+    if(d < (t.reachR||10) + 26){ narratedTypes.add(t.type); narrate(frizzFor(t.type)); break; }
+  }
+}
+
+// ---- guided tour: the bus auto-drives between organelles, narrating each ----
+function shortAng(a){ while(a>Math.PI)a-=2*Math.PI; while(a<-Math.PI)a+=2*Math.PI; return a; }
+function startTour(){
+  if(!targets.length) return;
+  questActive=false;
+  touring=true; thirdPerson=true; tourIdx=0; tourDwell=0; targets.forEach(t=>t._narr=false);
+  narrate("All aboard the cell bus! Let's take a tour. First stop, coming right up!");
+  setToolStates();
+}
+function stopTour(){ touring=false; tourDwell=0; setToolStates(); }
+function updateTour(dt){
+  if(tourIdx>=targets.length){ narrate("And that's the whole cell! Take the wheel and explore on your own."); stopTour(); return; }
+  const t=targets[tourIdx];
+  const center=t.center||t.mesh.position;
+  const to=center.clone().sub(playerPos); const dist=to.length(); if(dist>0.001) to.multiplyScalar(1/dist);
+  // steer the look smoothly toward the stop
+  const wantYaw=Math.atan2(-to.x,-to.z), wantPitch=Math.asin(Math.max(-1,Math.min(1,to.y)));
+  yaw += shortAng(wantYaw-yaw)*Math.min(1,dt*2.5);
+  pitch += (wantPitch-pitch)*Math.min(1,dt*2.5);
+  const stopDist=(t.reachR||10)+24;
+  if(dist>stopDist){
+    playerPos.addScaledVector(to, Math.min(36, (dist-stopDist))*dt*1.4);  // cruise in
+    vel.copy(to).multiplyScalar(22); tourDwell=0; t._narr=false;
+  } else {
+    vel.multiplyScalar(0.8);
+    if(!t._narr){ t._narr=true; tourDwell=0; narrate(frizzFor(t.type)); }
+    tourDwell+=dt;
+    if(tourDwell>2.2 && !speaking()) tourIdx++;   // move on once Frizzle finishes
+  }
+}
+
+// ===================================================================
+//  LIVING CELL — generative Web Audio soundscape
+// ===================================================================
+function ensureAudio(){
+  if(audioCtx) return true;
+  const AC = window.AudioContext || window.webkitAudioContext; if(!AC) return false;
+  audioCtx = new AC();
+  audioMaster = audioCtx.createGain(); audioMaster.gain.value = 0;
+  const comp = audioCtx.createDynamicsCompressor(); audioMaster.connect(comp); comp.connect(audioCtx.destination);
+  // warm ambient drone — AUDIBLE mid frequencies (laptop speakers can't reproduce sub-bass),
+  // a soft chord with slow detune shimmer through a gentle lowpass.
+  const lp = audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1100; lp.Q.value=0.4;
+  const pad = audioCtx.createGain(); pad.gain.value=0.16;
+  [110, 164.81, 220, 277.18, 329.63].forEach((f,i)=>{   // A2 · E3 · A3 · C#4 · E4
+    const o=audioCtx.createOscillator(); o.type = i<2?'sine':'triangle'; o.frequency.value=f;
+    const lfo=audioCtx.createOscillator(); lfo.frequency.value=0.05+0.04*i;
+    const lg=audioCtx.createGain(); lg.gain.value=3; lfo.connect(lg); lg.connect(o.detune); lfo.start();
+    const g=audioCtx.createGain(); g.gain.value = i<2?0.5:0.3; o.connect(g); g.connect(lp); o.start();
+  });
+  lp.connect(pad); pad.connect(audioMaster); audioPadLP = lp;
+  return true;
+}
+function ping(freq, amp){    // short sonar ping (through master, so it respects ambience volume)
+  if(!audioCtx || !audioMaster) return; const t=audioCtx.currentTime;
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type='sine'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(amp,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);
+  o.connect(g); g.connect(audioMaster); o.start(t); o.stop(t+0.2);
+}
+function blip(freq, amp, dur){            // a clearly-audible confirmation tone
+  if(!audioCtx) return; const t=audioCtx.currentTime;
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type='sine'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(amp,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+(dur||0.25));
+  o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t+(dur||0.25)+0.02);
+}
+function setAmbience(on){
+  ambienceOn = on!==undefined ? on : !ambienceOn;
+  if(ambienceOn){
+    if(!ensureAudio()){ ambienceOn=false; setToolStates(); return; }
+    const go = ()=>{
+      audioMaster.gain.cancelScheduledValues(audioCtx.currentTime);
+      audioMaster.gain.setValueAtTime(Math.max(0.0001,audioMaster.gain.value), audioCtx.currentTime);
+      audioMaster.gain.exponentialRampToValueAtTime(0.6, audioCtx.currentTime+0.4);
+      blip(660,0.25,0.12); blip(990,0.18,0.18);   // audible "sound is on" chirp (bypasses master)
+    };
+    if(audioCtx.state==='suspended') audioCtx.resume().then(go); else go();
+  } else if(audioMaster){
+    audioMaster.gain.cancelScheduledValues(audioCtx.currentTime);
+    audioMaster.gain.setValueAtTime(Math.max(0.0001,audioMaster.gain.value), audioCtx.currentTime);
+    audioMaster.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+0.4);
+  }
+  setToolStates();
+}
+function thump(freq, amp, when){
+  if(!audioCtx) return; const t=audioCtx.currentTime+(when||0);
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.frequency.setValueAtTime(freq,t); o.frequency.exponentialRampToValueAtTime(Math.max(20,freq*0.5), t+0.16);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(amp,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.24);
+  o.connect(g); g.connect(audioMaster); o.start(t); o.stop(t+0.3);
+}
+function chime(freq){
+  if(!audioCtx || !ambienceOn) return; const t=audioCtx.currentTime;
+  [freq, freq*1.5, freq*2].forEach((f,i)=>{ const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type='sine'; o.frequency.value=f; g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.16/(i+1), t+0.03); g.gain.exponentialRampToValueAtTime(0.0001, t+0.5);
+    o.connect(g); g.connect(audioMaster); o.start(t); o.stop(t+0.55); });
+}
+
+// ===================================================================
+//  CARGO RUN — drive the real secretory pathway: ER -> Golgi -> membrane
+// ===================================================================
+function planQuest(){
+  const have=new Set(targets.map(t=>t.type));
+  const first = t=>targets.find(x=>x.type===t);
+  const pick = have.has('er')?'er' : have.has('ribosome')?'ribosome' : have.has('nucleus')?'nucleus' : (targets[0]&&targets[0].type);
+  const proc = have.has('golgi')?'golgi' : have.has('er')&&pick!=='er'?'er' : have.has('vesicle')?'vesicle' : pick;
+  const SHORT={er:'the ER', golgi:'the Golgi', nucleus:'the nucleus', nucleolus:'the nucleolus',
+    ribosome:'a ribosome', vesicle:'a vesicle', mito:'a mitochondrion', lysosome:'a lysosome', endosome:'an endosome'};
+  const label = t => t==='__membrane__' ? 'the cell membrane' : (SHORT[t] || ('the '+(ORG[t]?ORG[t].name:t)));
+  return [
+    {type:pick, short:'Go to '+label(pick)},
+    {type:proc, short:'Go to '+label(proc)},
+    {type:'__membrane__', short:'Go to the cell membrane'},
+  ];
+}
+function startCargoRun(){
+  if(!targets.length) return;
+  touring=false; questActive=true; questStage=0; questClock=0; questDwell=0; questStages=planQuest();
+  narrate("Let's take a trip, class! Follow the marker — "+questStages[0].short.toLowerCase()+"!");
+  flash(questStages[0].short);
+  setToolStates();
+}
+function stopCargoRun(){ questActive=false; nextObjective(); setToolStates(); }
+function updateCargoTick(dt){
+  questClock += dt;
+  const st = questStages[questStage];
+  const tp = questTargetPoint(st);
+  const dist = tp.distanceTo(playerPos);
+  setCompass(tp);
+  ui.compDist.textContent = dist.toFixed(0)+" units";
+  ui.objName.textContent = '🎯 '+st.short;
+
+  // tight reach + a short dwell ("load/package/secrete") so each stop is a real beat,
+  // not blown through — and so nearby stops can't chain-complete in one frame.
+  let inRange;
+  if(st.type==='__membrane__') inRange = playerPos.length() > CELL_R-16;
+  else { const tg=targets.find(t=>t.type===st.type); inRange = dist < Math.min(tg?tg.reachR:12, 14)+6; }
+  ui.cross.classList.toggle('lock', inRange);
+  if(inRange){
+    questDwell = Math.min(1, questDwell + dt/0.7);   // brief pause so you can't blow straight through
+    ui.scanbar.style.opacity=1; ui.scanfill.style.width=(questDwell*100).toFixed(0)+'%';
+    ui.objHint.innerHTML = 'arriving…';
+    if(questDwell>=1){ questDwell=0; ui.scanbar.style.opacity=0; advanceQuest(); }
+  } else {
+    questDwell = Math.max(0, questDwell - dt*1.5);
+    ui.scanfill.style.width=(questDwell*100).toFixed(0)+'%'; if(questDwell<=0) ui.scanbar.style.opacity=0;
+    ui.objHint.innerHTML = 'stop '+(questStage+1)+'/3 · '+questClock.toFixed(0)+'s';
+  }
+}
+function questTargetPoint(st){
+  if(st.type==='__membrane__'){ const p=playerPos.length()>1?playerPos.clone():new THREE.Vector3(0,0,1); return p.setLength(CELL_R-6); }
+  const tg=targets.find(t=>t.type===st.type); return tg?(tg.center||tg.mesh.position):new THREE.Vector3();
+}
+function advanceQuest(){
+  if(questStage>=2){ chime(900); winQuest(); return; }
+  questStage++;
+  chime(720);
+  narrate("Nice! Now, "+questStages[questStage].short.toLowerCase()+".");
+  flash(questStages[questStage].short);
+}
+function winQuest(){
+  questActive=false;
+  flash("route complete!  "+questClock.toFixed(0)+"s");
+  narrate("You made it all the way out to the membrane! That's the path a protein takes to leave the cell. Great driving, class!");
+  nextObjective(); setToolStates();
+}
+
+// ---- controls ----------------------------------------------------
+const keys={};
+addEventListener('keydown', e=>{ if(e.code==="Space") e.preventDefault();
+  if(!e.repeat && !gameEl.classList.contains('hidden')){
+    if(e.code==="KeyV") toggleView();
+    else if(e.code==="KeyN") toggleNarration();
+    else if(e.code==="KeyT") (touring?stopTour():startTour());
+    else if(e.code==="KeyC") toggleColors();
+    else if(e.code==="KeyH") toggleShadows();
+    else if(e.code==="KeyM") setAmbience();
+    else if(e.code==="KeyG") (questActive?stopCargoRun():startCargoRun());
+  }
+  keys[e.code]=true; });
+// mouse wheel controls the forward torch brightness (only while diving)
+addEventListener('wheel', e=>{
+  if(gameEl.classList.contains('hidden')) return;
+  e.preventDefault();
+  spotIntensity = Math.max(0, Math.min(9, spotIntensity - Math.sign(e.deltaY)*0.6));
+  if(spot) spot.intensity = spotIntensity;
+  flash('torch '+(spotIntensity<=0?'off':Math.round(spotIntensity/9*100)+'%'));
+}, {passive:false});
+addEventListener('keyup',   e=>{ keys[e.code]=false; });
+let dragging=false,lastX=0,lastY=0,yaw=0,pitch=0;
+appEl.addEventListener('pointerdown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; appEl.style.cursor='grabbing'; try{e.target.setPointerCapture(e.pointerId)}catch(_){} });
+appEl.addEventListener('pointerup',   ()=>{ dragging=false; appEl.style.cursor='grab'; });
+appEl.addEventListener('pointermove', e=>{ if(!dragging) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
+  yaw-=dx*0.0026; pitch-=dy*0.0026; pitch=Math.max(-1.45,Math.min(1.45,pitch)); });
+appEl.style.cursor='grab';
+
+const vel=new THREE.Vector3(), fwd=new THREE.Vector3(), right=new THREE.Vector3();
+const WORLD_UP=new THREE.Vector3(0,1,0);
+
+// ---- HUD refs ----------------------------------------------------
+const ui = {
+  depth:document.getElementById('depth'), speed:document.getElementById('speed'),
+  found:document.getElementById('found'), objName:document.getElementById('objName'),
+  obj:document.getElementById('obj'), objHint:document.getElementById('objHint'),
+  flash:document.getElementById('flash'), specId:document.getElementById('specId'),
+  specWho:document.getElementById('specWho'), specSrc:document.getElementById('specSrc'),
+  compDot:document.getElementById('compDot'),
+  compDist:document.getElementById('compDist'), cross:document.getElementById('cross'),
+  scanbar:document.getElementById('scanbar'), scanfill:document.querySelector('#scanbar > i'),
+  stream:document.getElementById('stream'), layersBody:document.getElementById('layersBody'),
+};
+const card = {
+  el:document.getElementById('card'), title:document.getElementById('cardTitle'),
+  desc:document.getElementById('cardDesc'), seg:document.getElementById('cardSeg'),
+};
+document.getElementById('cardClose').onclick=()=>card.el.classList.remove('show');
+let foundCount=0, objIdx=0;
+
+function nextObjective(){
+  while(objIdx<targets.length && targets[objIdx].found) objIdx++;
+  ui.obj.classList.remove('done','scanning');
+  if(objIdx>=targets.length){ ui.objName.textContent='specimen fully mapped'; ui.obj.classList.add('done');
+    ui.compDist.textContent='—'; showWin(); return; }
+  ui.objName.textContent = targets[objIdx].name;
+}
+function flash(msg){ ui.flash.textContent=msg; ui.flash.style.opacity=1; setTimeout(()=>ui.flash.style.opacity=0,1100); }
+function showCard(type){ const o=ORG[type]; if(!o) return; card.title.textContent=o.name; card.desc.textContent=o.desc;
+  card.seg.innerHTML=o.seg; card.el.classList.add('show'); }
+// mark an organelle TYPE analyzed (so scanning ANY instance of a type satisfies its objective)
+function markTypeFound(type){
+  const t=targets.find(x=>x.type===type);
+  if(t && !t.found){ t.found=true; foundCount++; ui.found.textContent=foundCount+" / "+targets.length; return true; }
+  return false;
+}
+
+function showWin(){
+  const w=document.getElementById('win');
+  document.getElementById('winText').textContent =
+    `You analyzed all ${targets.length} organelle classes in ${spec.id}.`;
+  document.getElementById('winOpen').href = VIEWER + spec.id;
+  w.classList.add('show');
+}
+document.getElementById('winAgain').onclick = exitToSelect;
+document.getElementById('exitBtn').onclick = exitToSelect;
+function exitToSelect(){ if('speechSynthesis' in window) speechSynthesis.cancel(); touring=false; clearScene(); gameEl.classList.add('hidden'); document.getElementById('win').classList.remove('show'); selEl.classList.remove('hidden'); }
+
+// ---- toolbar (narration / tour / colors / shadows / view) --------
+const tools = {
+  cargo:document.getElementById('tCargo'), narr:document.getElementById('tNarr'), tour:document.getElementById('tTour'),
+  amb:document.getElementById('tAmb'), color:document.getElementById('tColor'), shadow:document.getElementById('tShadow'),
+  view:document.getElementById('tView'),
+};
+function setToolStates(){
+  tools.cargo.classList.toggle('on', questActive);
+  tools.cargo.textContent = questActive ? '✕ end run' : '🎯 cargo run';
+  tools.narr.classList.toggle('on', narrationOn);
+  tools.tour.classList.toggle('on', touring);
+  tools.tour.textContent = touring ? '⏹ end tour' : '🧭 take the tour';
+  tools.amb.classList.toggle('on', ambienceOn);
+  tools.color.classList.toggle('on', uniqueColors);
+  tools.shadow.classList.toggle('on', shadowsOn);
+  tools.view.classList.toggle('on', thirdPerson);
+}
+function toggleNarration(){ narrationOn=!narrationOn; if(!narrationOn && 'speechSynthesis' in window) speechSynthesis.cancel(); setToolStates();
+  if(narrationOn) narrate("Narration on! I'm your guide — drive close to anything and I'll tell you what it is."); }
+function toggleView(){ thirdPerson=!thirdPerson; setToolStates(); }
+tools.cargo.onclick = ()=> questActive ? stopCargoRun() : startCargoRun();
+tools.narr.onclick = toggleNarration;
+tools.tour.onclick = ()=> touring ? stopTour() : startTour();
+tools.amb.onclick = ()=> setAmbience();
+tools.color.onclick = ()=> toggleColors();
+tools.shadow.onclick = ()=> toggleShadows();
+tools.view.onclick = toggleView;
+
+// mesh-detail slider: caps how fine LODs may load (full = current behaviour; lower = coarser)
+const resSlider=document.getElementById('resSlider'), resVal=document.getElementById('resVal');
+const RES_LABELS={6:'full',5:'high',4:'med',3:'low',2:'coarse',1:'min'};
+if(resSlider) resSlider.addEventListener('input', ()=>{
+  const v=+resSlider.value; resCap=6-v; resVal.textContent=RES_LABELS[v]||v;
+});
+
+// ---- scan state --------------------------------------------------
+let scanProgress=0, scanMesh=null;
+
+// 3D direction sphere: place the dot as the orthographic projection of the target direction onto
+// the camera's screen plane. Centre = dead ahead; rim = 90° to the side/up/down; when the target
+// is behind, pin the dot to the rim (ringed) pointing the way you'd turn.
+const _cu=new THREE.Vector3(), _ct=new THREE.Vector3();
+function setCompass(tp){
+  _ct.copy(tp).sub(playerPos); const d=_ct.length(); if(d>1e-4) _ct.multiplyScalar(1/d);
+  _cu.crossVectors(right, fwd);                       // camera screen-up
+  const sx=_ct.dot(right), sy=_ct.dot(_cu), sz=_ct.dot(fwd), R=15;
+  let x,y;
+  if(sz>=0){ x=sx*R; y=-sy*R; }                       // front hemisphere — true sphere projection
+  else { const m=Math.hypot(sx,sy)||1e-6; x=sx/m*R; y=-sy/m*R; }   // behind — pin to rim
+  ui.compDot.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`;
+  ui.compDot.classList.toggle('behind', sz<0);
+  ui.compDot.style.opacity = sz>=0 ? (0.55+0.45*sz).toFixed(2) : '0.6';
+}
+
+// ---- main loop ---------------------------------------------------
+const clock = new THREE.Clock();
+function tick(){
+  raf = requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  const anyMove = keys['KeyW']||keys['KeyS']||keys['KeyA']||keys['KeyD']||keys['KeyR']||keys['KeyF'];
+  if(touring && anyMove) stopTour();     // grabbing the wheel cancels the tour
+  if(touring) updateTour(dt);            // auto-drives, sets yaw/pitch + playerPos
+
+  // look orientation, decoupled from camera placement so we can do 1st/3rd person
+  const qLook = new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch,yaw,0,'YXZ'));
+  fwd.set(0,0,-1).applyQuaternion(qLook);
+  right.crossVectors(fwd, WORLD_UP).normalize();
+
+  if(!touring){
+    const boost=(keys['ShiftLeft']||keys['ShiftRight'])?2.8:1;
+    const accel=64*boost;   // gentler thrust; the bus carries its momentum
+    if(keys['KeyW']) vel.addScaledVector(fwd, accel*dt);
+    if(keys['KeyS']) vel.addScaledVector(fwd,-accel*dt);
+    if(keys['KeyD']) vel.addScaledVector(right, accel*dt);
+    if(keys['KeyA']) vel.addScaledVector(right,-accel*dt);
+    if(keys['KeyR']) vel.addScaledVector(WORLD_UP, accel*dt);
+    if(keys['KeyF']) vel.addScaledVector(WORLD_UP,-accel*dt);
+    // momentum: light damping so the bus glides and coasts to a stop
+    vel.multiplyScalar(anyMove ? 0.96 : 0.975);
+    if(!anyMove && vel.lengthSq() < 0.0004) vel.set(0,0,0);   // settle fully when idle
+    playerPos.addScaledVector(vel, dt);
+  }
+
+  // soft containment
+  const dlen = playerPos.length();
+  if(dlen > CELL_R-4){ playerPos.multiplyScalar((CELL_R-4)/dlen); vel.multiplyScalar(0.3); }
+
+  // place the camera + bus for the active view
+  if(thirdPerson && bus){
+    const lat = vel.dot(right);
+    busRoll += (Math.max(-0.5,Math.min(0.5,-lat*0.045)) - busRoll)*(1-Math.pow(0.002,dt));  // bank into turns
+    bus.visible=true; bus.position.copy(playerPos); bus.quaternion.copy(qLook); bus.rotateZ(busRoll);
+    camera.position.copy(playerPos).addScaledVector(fwd,-10).addScaledVector(WORLD_UP,3.6).addScaledVector(right,0.4);
+    camera.lookAt(playerPos.clone().addScaledVector(fwd,8));
+  } else {
+    if(bus) bus.visible=false;
+    camera.position.copy(playerPos);
+    camera.quaternion.copy(qLook);
+  }
+
+  // life — kept subtle on purpose: a rotating dust field / fast spins read as self-motion
+  // (vection) and make a still camera feel like it's drifting or falling.
+  targets.forEach(t=>{ t.mesh.rotation.y += (t.mesh.userData.spin||0)*dt; });
+  decor.forEach(m=>{ m.rotation.y += (m.userData.spin!==undefined?m.userData.spin:0.015)*dt; });
+  // dust is held still (no ambient rotation) so the world is stable when you stop moving
+
+  // objective + scan  (Cargo Run takes over the objective panel while active)
+  let activeTargetPos = null;
+  if(questActive){
+    updateCargoTick(dt);
+    activeTargetPos = questTargetPoint(questStages[questStage]);
+  } else {
+    // the suggested next objective drives the compass
+    if(objIdx<targets.length){
+      const ot=targets[objIdx], otc=ot.center||ot.mesh.position;
+      setCompass(otc);
+      ui.compDist.textContent = playerPos.distanceTo(otc).toFixed(0)+" units";
+      activeTargetPos = otc;
+    } else { ui.compDist.textContent='—'; }
+
+    // SPACE analyzes ANY organelle you're nearest to — every loaded mesh, not just the objectives
+    let candMesh=null, candType=null, cd=1e9;
+    const consider=(m,type)=>{ if(!m||!type) return;
+      const c=m.userData.center||m.position; const d=playerPos.distanceTo(c);
+      let reach=(m.userData.reachR||m.userData.r||8)+16;
+      if(m===scanMesh && scanProgress>0) reach*=1.5;   // sticky: keep an in-progress scan locked at the edge
+      if(d<reach && d<cd){ candMesh=m; candType=type; cd=d; } };
+    for(const t of targets) consider(t.mesh, t.type);
+    for(const m of decor)   consider(m, m.userData.type);
+    if(candMesh!==scanMesh){ scanMesh=candMesh; scanProgress=0; }
+    const inRange=!!candMesh;
+    ui.cross.classList.toggle('lock', inRange);
+    if(inRange && keys['Space']){
+      scanProgress = Math.min(1, scanProgress + dt/1.1);
+      ui.obj.classList.add('scanning');
+      ui.scanbar.style.opacity=1; ui.scanfill.style.width=(scanProgress*100).toFixed(0)+'%';
+      if(scanProgress>=1){
+        scanProgress=0; scanMesh=null;
+        ui.scanbar.style.opacity=0; ui.obj.classList.remove('scanning');
+        const nm=ORG[candType]?ORG[candType].name:candType, wasNew=markTypeFound(candType);
+        flash(nm+(wasNew?" analyzed":" ✓")); chime(680); showCard(candType);
+        if(wasNew) nextObjective();
+      }
+    } else {
+      scanProgress=Math.max(0, scanProgress - dt*0.8);
+      ui.scanfill.style.width=(scanProgress*100).toFixed(0)+'%';
+      if(scanProgress<=0){ ui.scanbar.style.opacity=0; ui.obj.classList.remove('scanning'); }
+      const nm=candType?(ORG[candType]?ORG[candType].name:candType):null;
+      ui.objHint.innerHTML = nm
+        ? `hold <b style="color:#dfe9f5">SPACE</b> to analyze <b style="color:#9dffb0">${nm}</b>`
+        : `fly up to any organelle, then hold <b style="color:#dfe9f5">SPACE</b> to analyze`;
+    }
+  }
+
+  // 3D direction marker floats at the active target (shows through everything)
+  if(marker){
+    if(activeTargetPos){ markerPulse+=dt; marker.visible=true; marker.position.copy(activeTargetPos);
+      marker.material.opacity = 0.55 + 0.45*Math.abs(Math.sin(markerPulse*2.4)); }
+    else marker.visible=false;
+  }
+
+  // ambience: heartbeat + a sonar ping that quickens & rises in pitch as you near the target
+  if(ambienceOn && audioCtx){
+    heartTimer-=dt; if(heartTimer<=0){ heartTimer=1.15; thump(90,0.5,0); thump(70,0.34,0.24); }
+    if(activeTargetPos){
+      const c = Math.max(0, Math.min(1, 1 - playerPos.distanceTo(activeTargetPos)/170));
+      pingTimer-=dt; if(pingTimer<=0){ ping(480 + c*760, 0.05 + c*0.12); pingTimer = 1.6 - c*1.35; }
+      if(audioPadLP) audioPadLP.frequency.value = 700 + c*1600;   // cytoplasm brightens as you close in
+    }
+  }
+  manageLOD(dt);
+  proximityNarrate();
+  // debounce the streaming chip so quick refinements don't make it flicker/pop
+  lodActiveTime = lodLoading>0 ? lodActiveTime+dt : 0;
+  ui.stream.classList.toggle('hidden', lodActiveTime < 0.6);
+  ui.depth.textContent = (CELL_R - playerPos.length()).toFixed(0)+" nm*";
+  ui.speed.textContent = vel.length().toFixed(1);
+
+  renderer.render(scene,camera);
+}
+
+addEventListener('resize', ()=>{ if(!renderer) return;
+  camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight); });
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>mesh probe</title>
+<style>html,body{margin:0;height:100%;background:#05070d;color:#cfe;font:12px monospace}
+#log{position:fixed;top:0;left:0;max-width:48ch;padding:8px;white-space:pre-wrap;z-index:2}
+canvas{display:block}</style>
+</head>
+<body>
+<div id="log"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://www.gstatic.com/draco/v1/decoders/draco_decoder.js"></script>
+<script>
+const logEl = document.getElementById('log');
+const log = (...a)=>{ console.log(...a); logEl.textContent += a.join(' ')+'\n'; };
+window.__done = false; window.__err = null;
+
+const BASE = "https://janelia-cosem-datasets.s3.amazonaws.com/jrc_hela-2/neuroglancer/mesh/mito_seg";
+
+// ---- load draco module ----
+function loadDraco(){
+  return new Promise((res,rej)=>{
+    try{ DracoDecoderModule({ onModuleLoaded: m=>res(m) }); }catch(e){ rej(e); }
+  });
+}
+
+// ---- parse the unsharded multires manifest (.index) ----
+function parseManifest(buf){
+  const dv = new DataView(buf); let o=0;
+  const f32=()=>{const v=dv.getFloat32(o,true);o+=4;return v;};
+  const u32=()=>{const v=dv.getUint32(o,true);o+=4;return v;};
+  const chunk_shape=[f32(),f32(),f32()];
+  const grid_origin=[f32(),f32(),f32()];
+  const num_lods=u32();
+  const lod_scales=[]; for(let i=0;i<num_lods;i++) lod_scales.push(f32());
+  const vertex_offsets=[]; for(let i=0;i<num_lods;i++) vertex_offsets.push([f32(),f32(),f32()]);
+  const nfpl=[]; for(let i=0;i<num_lods;i++) nfpl.push(u32());
+  const lods=[];
+  let byteCursor=0;
+  for(let l=0;l<num_lods;l++){
+    const nf=nfpl[l];
+    // fragment_positions: C-order [3, nf] -> all x, all y, all z
+    const xs=[],ys=[],zs=[];
+    for(let i=0;i<nf;i++) xs.push(u32());
+    for(let i=0;i<nf;i++) ys.push(u32());
+    for(let i=0;i<nf;i++) zs.push(u32());
+    const sizes=[]; for(let i=0;i<nf;i++) sizes.push(u32());
+    const frags=[];
+    for(let i=0;i<nf;i++){
+      frags.push({pos:[xs[i],ys[i],zs[i]], size:sizes[i], byteStart:byteCursor});
+      byteCursor+=sizes[i];
+    }
+    lods.push({lod:l, nf, frags});
+  }
+  return {chunk_shape, grid_origin, num_lods, lod_scales, vertex_offsets, nfpl, lods, totalBytes:byteCursor};
+}
+
+// ---- draco decode one fragment buffer -> {pos:Float32Array(quantized), idx:Uint32Array} ----
+function decodeDraco(draco, arrayBuf){
+  const decoder = new draco.Decoder();
+  const db = new draco.DecoderBuffer();
+  const i8 = new Int8Array(arrayBuf);
+  db.Init(i8, i8.length);
+  const gtype = decoder.GetEncodedGeometryType(db);
+  if(gtype !== draco.TRIANGULAR_MESH){ draco.destroy(db); draco.destroy(decoder); return null; }
+  const mesh = new draco.Mesh();
+  const status = decoder.DecodeBufferToMesh(db, mesh);
+  if(!status.ok()){ log('draco decode fail', status.error_msg()); }
+  const nPoints = mesh.num_points();
+  const nFaces = mesh.num_faces();
+  const posAttId = decoder.GetAttributeId(mesh, draco.POSITION);
+  const posAtt = decoder.GetAttribute(mesh, posAttId);
+  const posArr = new draco.DracoFloat32Array();
+  decoder.GetAttributeFloatForAllPoints(mesh, posAtt, posArr);
+  const pos = new Float32Array(nPoints*3);
+  for(let i=0;i<nPoints*3;i++) pos[i]=posArr.GetValue(i);
+  const idx = new Uint32Array(nFaces*3);
+  const ia = new draco.DracoInt32Array();
+  for(let f=0;f<nFaces;f++){ decoder.GetFaceFromMesh(mesh,f,ia); idx[f*3]=ia.GetValue(0); idx[f*3+1]=ia.GetValue(1); idx[f*3+2]=ia.GetValue(2); }
+  draco.destroy(posArr); draco.destroy(ia); draco.destroy(mesh); draco.destroy(db); draco.destroy(decoder);
+  return {pos, idx, nPoints, nFaces};
+}
+
+async function run(){
+  log('loading draco…');
+  const draco = await loadDraco();
+  log('draco ready. POSITION=', draco.POSITION, 'TRIMESH=', draco.TRIANGULAR_MESH);
+
+  const info = await (await fetch(BASE+'/info')).json();
+  const bits = info.vertex_quantization_bits;
+  const T = info.transform; // 3x4 row-major
+  log('info bits=',bits,'transform=',JSON.stringify(T));
+
+  const SEG = 176; // a large mito segment
+  const idxBuf = await (await fetch(`${BASE}/${SEG}.index`)).arrayBuffer();
+  const man = parseManifest(idxBuf);
+  log('manifest: num_lods=',man.num_lods,'nfpl=',JSON.stringify(man.nfpl),
+      'chunk_shape=',man.chunk_shape.map(x=>x.toFixed(1)).join(','),
+      'total='+man.totalBytes);
+
+  // choose coarsest lod with fragments
+  let L=man.num_lods-1; while(L>0 && man.lods[L].nf===0) L--;
+  const lod = man.lods[L];
+  log('using LOD', L, 'with', lod.nf, 'fragments');
+
+  // fetch the byte span covering this lod's fragments
+  const nonEmpty = lod.frags.filter(f=>f.size>0);
+  if(!nonEmpty.length){ log('no geometry in chosen lod'); window.__done=true; return; }
+  const spanStart = nonEmpty[0].byteStart;
+  const spanEnd = nonEmpty[nonEmpty.length-1].byteStart + nonEmpty[nonEmpty.length-1].size - 1;
+  log('range bytes',spanStart+'-'+spanEnd);
+  const dataBuf = await (await fetch(`${BASE}/${SEG}`, {headers:{Range:`bytes=${spanStart}-${spanEnd}`}})).arrayBuffer();
+  log('got data bytes', dataBuf.byteLength);
+
+  const scale = Math.pow(2,bits)-1;
+  let allPos=[], allIdx=[], vbase=0;
+  for(const fr of nonEmpty){
+    const local = fr.byteStart - spanStart;
+    const slice = dataBuf.slice(local, local+fr.size);
+    const dec = decodeDraco(draco, slice);
+    if(!dec || dec.nPoints===0) continue;
+    for(let i=0;i<dec.nPoints;i++){
+      for(let j=0;j<3;j++){
+        const x = dec.pos[i*3+j];
+        const model = man.grid_origin[j] + man.vertex_offsets[L][j] +
+          man.chunk_shape[j]*Math.pow(2,L)*(fr.pos[j] + x/scale);
+        allPos.push(model);
+      }
+    }
+    for(let k=0;k<dec.idx.length;k++) allIdx.push(dec.idx[k]+vbase);
+    vbase += dec.nPoints;
+  }
+  log('decoded verts=',allPos.length/3,'tris=',allIdx.length/3);
+
+  // apply info transform (model voxel -> nm): row-major 3x4
+  const nm = new Float32Array(allPos.length);
+  for(let i=0;i<allPos.length/3;i++){
+    const x=allPos[i*3], y=allPos[i*3+1], z=allPos[i*3+2];
+    nm[i*3]   = T[0]*x+T[1]*y+T[2]*z+T[3];
+    nm[i*3+1] = T[4]*x+T[5]*y+T[6]*z+T[7];
+    nm[i*3+2] = T[8]*x+T[9]*y+T[10]*z+T[11];
+  }
+  // bbox
+  let mn=[1e30,1e30,1e30],mx=[-1e30,-1e30,-1e30];
+  for(let i=0;i<nm.length/3;i++) for(let j=0;j<3;j++){const v=nm[i*3+j]; if(v<mn[j])mn[j]=v; if(v>mx[j])mx[j]=v;}
+  log('bbox nm min=',mn.map(v=>v.toFixed(0)).join(','));
+  log('bbox nm max=',mx.map(v=>v.toFixed(0)).join(','));
+  log('size nm=',mx.map((v,j)=>(v-mn[j]).toFixed(0)).join(' x '));
+
+  // ---- render ----
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(nm,3));
+  g.setIndex(allIdx);
+  g.computeVertexNormals();
+  g.center();
+  const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setSize(innerWidth,innerHeight); document.body.appendChild(renderer.domElement);
+  const scene=new THREE.Scene(); scene.background=new THREE.Color(0x05070d);
+  const cam=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,1,1e6);
+  g.computeBoundingSphere(); const r=g.boundingSphere.radius;
+  cam.position.set(0,0,r*2.4);
+  scene.add(new THREE.AmbientLight(0x556677,1.2));
+  const pl=new THREE.PointLight(0xffffff,1.3); cam.add(pl); scene.add(cam);
+  const mat=new THREE.MeshStandardMaterial({color:0xff5fa8,emissive:0x4a0d2a,roughness:0.5,side:THREE.DoubleSide,flatShading:false});
+  const mesh=new THREE.Mesh(g,mat); scene.add(mesh);
+  let t=0; (function anim(){ t+=0.01; mesh.rotation.y=t; renderer.render(scene,cam); requestAnimationFrame(anim); })();
+  log('RENDERED radius=',r.toFixed(0),'nm');
+  window.__done=true;
+}
+run().catch(e=>{ window.__err=String(e); log('ERROR', e.stack||e); window.__done=true; });
+</script>
+</body>
+</html>
