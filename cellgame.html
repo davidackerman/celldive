@@ -244,10 +244,14 @@
     <button class="tool on" id="tColor">🎨 unique colors</button>
     <button class="tool" id="tShadow">☀️ shadows</button>
     <button class="tool" id="tView">🚌 bus view</button>
+    <button class="tool" id="tSkate">🛹 skateboard</button>
+    <button class="tool" id="tAvatar">🚌 bus</button>
+    <button class="tool" id="tShrink">- size</button>
+    <button class="tool" id="tGrow">+ size</button>
   </div>
 
   <div id="help" class="panel">
-    <b>WASD</b> fly · <b>drag</b> look · <b>R/F</b> up·down · <b>Shift</b> boost · <b>scroll</b> torch · <b>SPACE</b> analyze &nbsp;|&nbsp; <b>G</b> cargo run · <b>T</b> tour · <b>M</b> ambience · <b>V</b> view · <b>N</b> narrate · <b>C</b> colors · <b>H</b> shadows
+    <b>W/S</b> thrust/brake · <b>A/D</b> lean carve · <b>drag</b> look · <b>Shift</b> boost · <b>SPACE/R</b> jump while boarding · <b>SPACE</b> analyze &nbsp;|&nbsp; <b>X</b> board/detach · <b>K</b> avatar · <b>[</b>/<b>]</b> size · <b>V</b> view
   </div>
 
   <div id="win">
@@ -512,7 +516,8 @@ const loadingEl = document.getElementById('loading');
 let renderer, scene, camera, headlamp, raf=0;
 let spot=null, spotTarget=null, spotIntensity=2.6;   // controllable forward torch
 let shadowLight=null;                                // scene key light that casts object-on-object shadows
-let bus=null, thirdPerson=false, busRoll=0;          // the school bus + external view
+let bus=null, thirdPerson=false, busRoll=0;          // the visible avatar + external view
+let avatarMode="bus", avatarScale=1;
 const playerPos = new THREE.Vector3();               // logical position (camera rides this in 1st person)
 const layerMeshes = {};                              // organelle type -> [meshes], for the ng-style layer panel
 let uniqueColors=true, shadowsOn=false;             // ng-style per-segment colours (on by default); dynamic shadows
@@ -523,6 +528,11 @@ let questActive=false, questStage=0, questClock=0, questStages=null, questDwell=
 let marker=null, markerPulse=0;                       // 3D direction marker at the active target
 let targets=[], decor=[], dust;
 let spec=null;
+const raycaster = new THREE.Raycaster();
+const skate = {active:false, root:null, type:null, side:"outside", normal:new THREE.Vector3(0,1,0), forward:new THREE.Vector3(0,0,-1), lastPoint:new THREE.Vector3(), gravity:new THREE.Vector3(0,-1,0), lean:0, grace:0};
+const boardAir = {active:false, root:null, side:"outside", normal:new THREE.Vector3(0,1,0), gravity:new THREE.Vector3(0,-1,0), age:0, cooldown:0};
+const SKATE_MIN_R=7, SKATE_LATCH_DIST=42, SKATE_HOVER=3.1, SKATE_PROBE=18;
+const AVATAR_MIN_SCALE=0.06, AVATAR_MAX_SCALE=2.6, AVATAR_SCALE_RATIO=1.18;
 
 function fbm(x,y,z){
   return 0.55*Math.sin(x*1.3 + y*0.7)
@@ -924,6 +934,8 @@ function clearScene(){
   if(renderer){ renderer.dispose(); if(renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); }
   scene=null; targets=[]; decor=[]; dust=null; marker=null;
   currentFit=null; lodLoading=0; lodTimer=0; questActive=false;
+  skate.active=false; skate.root=null; skate.type=null; skate.side="outside"; skate.forward.set(0,0,-1); skate.gravity.copy(WORLD_DOWN); skate.lean=0; skate.grace=0;
+  boardAir.active=false; boardAir.root=null; boardAir.side="outside"; boardAir.normal.set(0,1,0); boardAir.gravity.copy(WORLD_DOWN); boardAir.age=0; boardAir.cooldown=0;
 }
 
 function setLoad(msg){ const s=loadingEl.querySelector('span'); if(s) s.textContent=msg; }
@@ -1023,8 +1035,9 @@ function buildScene(d, rnd){
     dd.position.set((rnd()-.5)*CELL_R*1.8,(rnd()-.5)*CELL_R*1.8,(rnd()-.5)*CELL_R*1.8); dust.add(dd); }
   scene.add(dust);
 
-  // the school bus (only shown in the external view; hidden in 1st person)
-  bus = makeBus(); bus.visible = thirdPerson; scene.add(bus);
+  // the avatar (only shown in the external view; hidden in 1st person)
+  bus = makeAvatar(); bus.visible = thirdPerson; scene.add(bus);
+  applyAvatarScale(false);
 
   // 3D direction marker — a reticle that floats at the active target, visible through anything
   marker = new THREE.Sprite(new THREE.SpriteMaterial({ map:makeMarkerTexture(),
@@ -1064,6 +1077,75 @@ function makeBus(){
   const hl=new THREE.PointLight(0xfff0c8, 0.8, 60); hl.position.set(0,0,-L/2-1); g.add(hl);
   g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   return g;
+}
+function makeCylinderBetween(a,b,r,mat){
+  const dir=b.clone().sub(a), len=dir.length();
+  const c=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,12), mat);
+  c.position.copy(a).add(b).multiplyScalar(0.5);
+  c.quaternion.setFromUnitVectors(WORLD_UP, dir.normalize());
+  return c;
+}
+function makeKinesin(){
+  const g = new THREE.Group();
+  const cargoMat = new THREE.MeshStandardMaterial({color:0x9dffb0, roughness:0.28, metalness:0.0, transparent:true, opacity:0.78, emissive:0x0e4a23, emissiveIntensity:0.45});
+  const bodyMat  = new THREE.MeshStandardMaterial({color:0x7fe7ff, roughness:0.36, metalness:0.05, emissive:0x123b4a, emissiveIntensity:0.45});
+  const legMat   = new THREE.MeshStandardMaterial({color:0xffd27f, roughness:0.42, metalness:0.02, emissive:0x4a3108, emissiveIntensity:0.35});
+  const footMat  = new THREE.MeshStandardMaterial({color:0xff8a4a, roughness:0.5, metalness:0.02, emissive:0x5a2400, emissiveIntensity:0.35});
+  const deckMat  = new THREE.MeshStandardMaterial({color:0x171c28, roughness:0.5, metalness:0.12, emissive:0x081018, emissiveIntensity:0.45});
+  const cargo=new THREE.Mesh(new THREE.SphereGeometry(1.15,24,18), cargoMat); cargo.position.set(0,1.45,2.2); g.add(cargo);
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.72,20,16), bodyMat); body.position.set(0,0.2,-0.65); body.scale.set(1.25,0.8,0.9); g.add(body);
+  g.add(makeCylinderBetween(new THREE.Vector3(0,1.0,1.45), new THREE.Vector3(0,0.36,-0.15), 0.16, bodyMat));
+  g.add(makeCylinderBetween(new THREE.Vector3(-0.34,-0.18,-0.95), new THREE.Vector3(-0.82,-0.92,-2.2), 0.13, legMat));
+  g.add(makeCylinderBetween(new THREE.Vector3(0.34,-0.18,-0.82), new THREE.Vector3(0.82,-0.92,-1.8), 0.13, legMat));
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.16,4.8), deckMat); deck.position.set(0,-1.32,-0.2); g.add(deck);
+  const wheelGeo=new THREE.CylinderGeometry(0.18,0.18,0.22,12);
+  [[-0.68,-1.75],[0.68,-1.75],[-0.68,1.1],[0.68,1.1]].forEach(([x,z])=>{
+    const wh=new THREE.Mesh(wheelGeo, footMat); wh.rotation.z=Math.PI/2; wh.position.set(x,-1.48,z); g.add(wh);
+  });
+  [[-0.82,-2.2],[0.82,-1.8]].forEach(([x,z])=>{
+    const foot=new THREE.Mesh(new THREE.SphereGeometry(0.42,16,10), footMat);
+    foot.position.set(x,-1.08,z); foot.scale.set(1.25,0.42,0.7); g.add(foot);
+  });
+  const glow=new THREE.PointLight(0x9dffe0, 0.55, 45); glow.position.set(0,0.2,-1.5); g.add(glow);
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+  return g;
+}
+function makeAvatar(){ return avatarMode==="kinesin" ? makeKinesin() : makeBus(); }
+function avatarName(){ return avatarMode==="kinesin" ? "kinesin" : "bus"; }
+function avatarHover(){ return SKATE_HOVER * Math.max(0.55, Math.sqrt(avatarScale)); }
+function avatarMoveScale(){ return Math.max(0.16, Math.min(1.35, Math.sqrt(avatarScale))); }
+function applyAvatarScale(updateTools=true){
+  if(bus) bus.scale.setScalar(avatarScale);
+  if(updateTools) setToolStates();
+}
+function disposeObject(obj){
+  if(!obj) return;
+  obj.traverse(o=>{
+    if(o.geometry) o.geometry.dispose();
+    if(o.material){
+      const mats=Array.isArray(o.material)?o.material:[o.material];
+      mats.forEach(m=>m && m.dispose && m.dispose());
+    }
+  });
+}
+function rebuildAvatar(){
+  if(!scene) return;
+  if(bus){ scene.remove(bus); disposeObject(bus); }
+  bus = makeAvatar();
+  bus.visible = thirdPerson;
+  scene.add(bus);
+  applyAvatarScale(false);
+  setToolStates();
+}
+function cycleAvatar(){
+  avatarMode = avatarMode==="bus" ? "kinesin" : "bus";
+  rebuildAvatar();
+  flash(avatarName()+" avatar");
+}
+function resizeAvatar(delta){
+  avatarScale = Math.max(AVATAR_MIN_SCALE, Math.min(AVATAR_MAX_SCALE, avatarScale * Math.pow(AVATAR_SCALE_RATIO, delta)));
+  applyAvatarScale();
+  flash(avatarName()+" "+Math.round(avatarScale*100)+"%");
 }
 
 // add genuine decoded meshes; one objective per organelle type (largest), rest scenery
@@ -1267,6 +1349,7 @@ function proximityNarrate(){
 function shortAng(a){ while(a>Math.PI)a-=2*Math.PI; while(a<-Math.PI)a+=2*Math.PI; return a; }
 function startTour(){
   if(!targets.length) return;
+  detachSkate(false);
   questActive=false;
   touring=true; thirdPerson=true; tourIdx=0; tourDwell=0; targets.forEach(t=>t._narr=false);
   narrate("All aboard the cell bus! Let's take a tour. First stop, coming right up!");
@@ -1434,13 +1517,19 @@ function winQuest(){
 const keys={};
 addEventListener('keydown', e=>{ if(e.code==="Space") e.preventDefault();
   if(!e.repeat && !gameEl.classList.contains('hidden')){
-    if(e.code==="KeyV") toggleView();
+    if(e.code==="Space" && skate.active) jumpSkate();
+    else if(e.code==="KeyR" && skate.active) jumpSkate();
+    else if(e.code==="KeyV") toggleView();
     else if(e.code==="KeyN") toggleNarration();
     else if(e.code==="KeyT") (touring?stopTour():startTour());
     else if(e.code==="KeyC") toggleColors();
     else if(e.code==="KeyH") toggleShadows();
     else if(e.code==="KeyM") setAmbience();
     else if(e.code==="KeyG") (questActive?stopCargoRun():startCargoRun());
+    else if(e.code==="KeyX") toggleSkateMode();
+    else if(e.code==="KeyK") cycleAvatar();
+    else if(e.code==="BracketLeft") resizeAvatar(-1);
+    else if(e.code==="BracketRight") resizeAvatar(1);
   }
   keys[e.code]=true; });
 // mouse wheel controls the forward torch brightness (only while diving)
@@ -1462,6 +1551,292 @@ appEl.style.cursor='grab';
 
 const vel=new THREE.Vector3(), fwd=new THREE.Vector3(), right=new THREE.Vector3();
 const WORLD_UP=new THREE.Vector3(0,1,0);
+const WORLD_DOWN=new THREE.Vector3(0,-1,0);
+const _sk0=new THREE.Vector3(), _sk1=new THREE.Vector3(), _sk2=new THREE.Vector3(), _sk3=new THREE.Vector3();
+const _skMat=new THREE.Matrix4();
+const _skQuat=new THREE.Quaternion();
+const _sn0=new THREE.Vector3(), _sn1=new THREE.Vector3(), _sn2=new THREE.Vector3(), _sn3=new THREE.Vector3(), _sn4=new THREE.Vector3();
+
+function skateRootFor(obj){
+  for(let o=obj; o && o!==scene; o=o.parent){
+    if(o.userData && o.userData.type) return o;
+  }
+  return null;
+}
+function isVisibleObject(obj){
+  for(let o=obj; o; o=o.parent){
+    if(o.visible===false) return false;
+    if(o===scene) break;
+  }
+  return true;
+}
+function skateRootCenter(root){
+  return root && root.userData && root.userData.center ? root.userData.center : (root ? root.position : _sk0.set(0,0,0));
+}
+function skateRootName(root){
+  const type=root && root.userData && root.userData.type;
+  return type && ORG[type] ? ORG[type].name : (type || "surface");
+}
+function skateRoots(){
+  const seen=new Set(), out=[];
+  const add=m=>{
+    if(!m || seen.has(m) || !isVisibleObject(m)) return;
+    const r=m.userData.r || m.userData.reachR || 0;
+    if(r < SKATE_MIN_R) return;
+    seen.add(m); out.push(m);
+  };
+  targets.forEach(t=>add(t.mesh));
+  decor.forEach(add);
+  return out;
+}
+function sampledHitNormal(hit){
+  const g=hit.object.geometry, face=hit.face;
+  const normals=g && g.attributes && g.attributes.normal;
+  const positions=g && g.attributes && g.attributes.position;
+  if(face && normals && positions){
+    _sn0.fromBufferAttribute(positions, face.a);
+    _sn1.fromBufferAttribute(positions, face.b);
+    _sn2.fromBufferAttribute(positions, face.c);
+    _sn3.copy(hit.point); hit.object.worldToLocal(_sn3);
+    const bary=THREE.Triangle.getBarycoord(_sn3, _sn0, _sn1, _sn2, _sn4);
+    if(bary && Number.isFinite(_sn4.x) && Number.isFinite(_sn4.y) && Number.isFinite(_sn4.z)){
+      _sn0.fromBufferAttribute(normals, face.a);
+      _sn1.fromBufferAttribute(normals, face.b);
+      _sn2.fromBufferAttribute(normals, face.c);
+      _sn3.set(0,0,0).addScaledVector(_sn0,_sn4.x).addScaledVector(_sn1,_sn4.y).addScaledVector(_sn2,_sn4.z);
+      if(_sn3.lengthSq()>1e-6) return _sn3.transformDirection(hit.object.matrixWorld).normalize();
+    }
+  }
+  return hit.face ? _sn3.copy(hit.face.normal).transformDirection(hit.object.matrixWorld) : _sn3.copy(playerPos).sub(hit.point);
+}
+function rawOrientedHitNormal(hit){
+  const n = sampledHitNormal(hit);
+  if(n.lengthSq()<1e-6) n.set(0,1,0);
+  _sk1.copy(playerPos).sub(hit.point);
+  if(n.dot(_sk1)<0) n.negate();
+  return n.normalize();
+}
+function skateSideFor(root, hit, normal){
+  const c=skateRootCenter(root);
+  _sk2.copy(hit.point).sub(c);
+  if(_sk2.lengthSq()<1e-6) return "outside";
+  return normal.dot(_sk2) >= 0 ? "outside" : "inside";
+}
+function skateTargetNormal(root, hit, side){
+  const n=rawOrientedHitNormal(hit);
+  const c=skateRootCenter(root);
+  const radial=_sk2.copy(hit.point).sub(c);
+  if(radial.lengthSq()>1e-6){
+    radial.normalize();
+    if(side==="inside") radial.negate();
+    if(n.dot(radial)<0) radial.negate();
+    n.lerp(radial, 0.6).normalize();    // real meshes are faceted; radial bias damps triangle chatter on blob-like surfaces
+  }
+  return n;
+}
+function boardGravityFor(root, side, normal, out){
+  if(side==="outside"){
+    out.copy(normal);
+    if(out.lengthSq()<1e-6) out.copy(WORLD_DOWN);
+    return out.negate().normalize();
+  }
+  return out.copy(WORLD_DOWN);
+}
+function updateSkateGravity(){
+  if(!skate.active || !skate.root){ skate.gravity.copy(WORLD_DOWN); return; }
+  boardGravityFor(skate.root, skate.side, skate.normal, skate.gravity);
+}
+function bestSkateHit(hits){
+  for(const h of hits){
+    const root=skateRootFor(h.object);
+    if(root && isVisibleObject(root)) return {hit:h, root};
+  }
+  return null;
+}
+function raycastSkateRoots(origin, dir, far, roots){
+  raycaster.near=0;
+  raycaster.far=far;
+  raycaster.set(origin, dir.normalize());
+  return bestSkateHit(raycaster.intersectObjects(roots, true));
+}
+function findSkateSurface(){
+  const roots=skateRoots();
+  if(!roots.length) return null;
+
+  // First try the thing under the crosshair.
+  let found=raycastSkateRoots(playerPos, _sk0.copy(fwd), SKATE_LATCH_DIST, roots);
+  if(found) return found;
+
+  // Then try nearby large surfaces, so you can latch while gliding beside a nucleus.
+  let best=null, bestDist=Infinity;
+  for(const root of roots){
+    const c=skateRootCenter(root);
+    const d=playerPos.distanceTo(c);
+    const r=root.userData.r || 0;
+    if(d > Math.max(SKATE_LATCH_DIST, r + SKATE_LATCH_DIST)) continue;
+    const dir=_sk0.copy(c).sub(playerPos);
+    if(dir.lengthSq()<1e-4) continue;
+    found=raycastSkateRoots(playerPos, dir, d + r + 8, [root]);
+    if(found && found.hit.distance<bestDist){ best=found; bestDist=found.hit.distance; }
+  }
+  return best;
+}
+function attachSkate(found){
+  boardAir.active=false;
+  skate.active=true;
+  skate.root=found.root;
+  skate.type=found.root.userData.type || null;
+  const hitNormal=rawOrientedHitNormal(found.hit);
+  skate.side=skateSideFor(found.root, found.hit, hitNormal);
+  skate.normal.copy(skateTargetNormal(found.root, found.hit, skate.side));
+  skate.forward.copy(fwd).projectOnPlane(skate.normal);
+  if(skate.forward.lengthSq()<1e-4) skate.forward.copy(vel).projectOnPlane(skate.normal);
+  if(skate.forward.lengthSq()<1e-4) skate.forward.copy(right).projectOnPlane(skate.normal);
+  skate.forward.normalize();
+  skate.lastPoint.copy(found.hit.point);
+  updateSkateGravity();
+  skate.lean=0;
+  skate.grace=0;
+  playerPos.copy(found.hit.point).addScaledVector(skate.normal, avatarHover());
+  vel.projectOnPlane(skate.normal);
+  if(vel.lengthSq()<16){
+    _sk0.copy(fwd).projectOnPlane(skate.normal);
+    if(_sk0.lengthSq()>1e-4) vel.addScaledVector(_sk0.normalize(), 10);
+  }
+  touring=false;
+  thirdPerson=true;
+  flash((skate.side==="inside"?"inside ":"")+"skateboarding "+skateRootName(found.root));
+  setToolStates();
+}
+function detachSkate(kick, msg){
+  if(!skate.active) return;
+  if(kick) vel.addScaledVector(skate.normal, 18);
+  skate.active=false;
+  skate.root=null;
+  skate.type=null;
+  skate.side="outside";
+  skate.lean=0;
+  skate.grace=0;
+  if(msg) flash(msg);
+  setToolStates();
+}
+function jumpSkate(){
+  if(!skate.active) return;
+  const n=_sk0.copy(skate.normal);
+  const launch=_sk1.copy(fwd).projectOnPlane(n);
+  const launchRoot=skate.root, launchSide=skate.side;
+  const launchGravity=_sk2.copy(skate.gravity);
+  detachSkate(false, "jump");
+  boardAir.active=true;
+  boardAir.root=launchRoot;
+  boardAir.side=launchSide;
+  boardAir.normal.copy(n);
+  boardAir.gravity.copy(launchGravity);
+  boardAir.age=0;
+  boardAir.cooldown=0.16;
+  setToolStates();
+  const hop=22*avatarMoveScale();
+  vel.addScaledVector(n, Math.max(7, hop));
+  if(launch.lengthSq()>1e-4) vel.addScaledVector(launch.normalize(), Math.max(3, hop*0.35));
+  scanCooldown=0.28;
+}
+function toggleSkateMode(){
+  if(boardAir.active){ boardAir.active=false; setToolStates(); flash("flight"); return; }
+  if(skate.active){ detachSkate(true, "detached"); return; }
+  const found=findSkateSurface();
+  if(found) attachSkate(found);
+  else flash("no boardable surface");
+}
+function resnapSkate(dt){
+  const root=skate.root;
+  if(!root || !isVisibleObject(root)){ detachSkate(false, "surface hidden"); return; }
+  const origin=_sk0.copy(playerPos).addScaledVector(skate.normal, SKATE_PROBE);
+  const hit=raycastSkateRoots(origin, _sk1.copy(skate.normal).negate(), SKATE_PROBE*2 + avatarHover() + 8, [root]);
+  let found=hit;
+  if(!found){
+    const c=skateRootCenter(root);
+    const dir=_sk1.copy(c).sub(playerPos);
+    if(dir.lengthSq()>1e-4) found=raycastSkateRoots(playerPos, dir, dir.length() + (root.userData.r||0) + 8, [root]);
+  }
+  if(found && found.root===root){
+    skate.grace=0;
+    const targetNormal=skateTargetNormal(root, found.hit, skate.side);
+    if(targetNormal.dot(skate.normal)<0) targetNormal.negate();
+    skate.normal.lerp(targetNormal, 1-Math.exp(-2.6*dt)).normalize();
+    skate.lastPoint.lerp(found.hit.point, 1-Math.exp(-24*dt));
+    playerPos.copy(skate.lastPoint).addScaledVector(skate.normal, avatarHover());
+    vel.projectOnPlane(skate.normal);
+    updateSkateGravity();
+  } else {
+    skate.grace += dt;
+    if(skate.grace>0.35) detachSkate(false, "lost surface");
+  }
+}
+function updateSkate(dt, boost, anyDrive){
+  if(!skate.active) return;
+  updateSkateGravity();
+  skate.forward.projectOnPlane(skate.normal);
+  if(skate.forward.lengthSq()<1e-4) skate.forward.copy(fwd).projectOnPlane(skate.normal);
+  if(skate.forward.lengthSq()<1e-4) skate.forward.copy(vel).projectOnPlane(skate.normal);
+  if(skate.forward.lengthSq()<1e-4) skate.forward.copy(right).projectOnPlane(skate.normal);
+  skate.forward.normalize();
+
+  const sizeSpeed=avatarMoveScale();
+  const thrust=boost>1 ? 1.55 : 1;
+  const speed=vel.length();
+  const turnInput=(keys['KeyD']?1:0) - (keys['KeyA']?1:0);
+  const targetLean=turnInput * Math.min(0.68, 0.25 + speed*0.014);
+  skate.lean += (targetLean-skate.lean) * (1-Math.exp(-8.5*dt));
+  if(Math.abs(skate.lean)>0.002){
+    const turnRate=(0.92 + Math.min(speed,46)*0.038) * Math.abs(skate.lean);
+    _skQuat.setFromAxisAngle(skate.normal, -Math.sign(skate.lean)*turnRate*dt);
+    skate.forward.applyQuaternion(_skQuat).projectOnPlane(skate.normal).normalize();
+  }
+
+  const tangentRight=_sk1.crossVectors(skate.forward, skate.normal).normalize();
+  if(keys['KeyW']) vel.addScaledVector(skate.forward, 31*thrust*sizeSpeed*dt);
+  if(keys['KeyS']){
+    vel.addScaledVector(skate.forward, -18*sizeSpeed*dt);
+    vel.multiplyScalar(Math.pow(0.94, dt*60));
+  }
+
+  const planarVel=_sk2.copy(vel).projectOnPlane(skate.normal);
+  if(Math.abs(turnInput)<0.05 && planarVel.lengthSq()>9){
+    skate.forward.lerp(planarVel.normalize(), 1-Math.exp(-1.8*dt)).projectOnPlane(skate.normal).normalize();
+  }
+  const lateral=vel.dot(tangentRight);
+  vel.addScaledVector(tangentRight, -lateral*(1-Math.exp(-7.5*dt)));  // wheel grip: lean carves, it does not strafe
+
+  const downhill=_sk3.copy(skate.gravity).projectOnPlane(skate.normal);
+  if(downhill.lengthSq()>1e-4) vel.addScaledVector(downhill.normalize(), (skate.side==="inside"?18:7)*sizeSpeed*dt);
+
+  vel.projectOnPlane(skate.normal);
+  const max=(boost>1 ? 46 : 30) * sizeSpeed;
+  if(vel.length()>max) vel.setLength(max);
+  vel.multiplyScalar(Math.pow(anyDrive ? 0.982 : 0.991, dt*60));
+  if(!anyDrive && vel.lengthSq()<0.0025) vel.set(0,0,0);
+  playerPos.addScaledVector(vel, dt);
+  resnapSkate(dt);
+}
+function updateBoardAir(dt){
+  if(!boardAir.active) return;
+  boardAir.age += dt;
+  boardAir.cooldown = Math.max(0, boardAir.cooldown-dt);
+  if(!boardAir.root || !isVisibleObject(boardAir.root)){ boardAir.active=false; setToolStates(); return; }
+  boardGravityFor(boardAir.root, boardAir.side, boardAir.normal, boardAir.gravity);
+  vel.addScaledVector(boardAir.gravity, (boardAir.side==="inside"?48:58)*avatarMoveScale()*dt);
+}
+function tryBoardAirLand(dt){
+  if(!boardAir.active || boardAir.cooldown>0 || !boardAir.root || !isVisibleObject(boardAir.root)) return;
+  const far=avatarHover()+Math.max(18, vel.length()*dt*3.2);
+  let found=raycastSkateRoots(playerPos, _sk0.copy(boardAir.gravity), far, [boardAir.root]);
+  if(!found && boardAir.side==="outside") found=raycastSkateRoots(playerPos, _sk0.copy(boardAir.normal).negate(), far*1.4, [boardAir.root]);
+  if(!found && boardAir.side==="inside") found=raycastSkateRoots(playerPos, _sk0.copy(WORLD_DOWN), far*1.2, [boardAir.root]);
+  if(found && found.root===boardAir.root){
+    boardAir.active=false;
+    attachSkate(found);
+  }
+}
 
 // ---- HUD refs ----------------------------------------------------
 const ui = {
@@ -1514,7 +1889,8 @@ function exitToSelect(){ if('speechSynthesis' in window) speechSynthesis.cancel(
 const tools = {
   cargo:document.getElementById('tCargo'), narr:document.getElementById('tNarr'), tour:document.getElementById('tTour'),
   amb:document.getElementById('tAmb'), color:document.getElementById('tColor'), shadow:document.getElementById('tShadow'),
-  view:document.getElementById('tView'),
+  view:document.getElementById('tView'), skate:document.getElementById('tSkate'),
+  avatar:document.getElementById('tAvatar'), shrink:document.getElementById('tShrink'), grow:document.getElementById('tGrow'),
 };
 function setToolStates(){
   tools.cargo.classList.toggle('on', questActive);
@@ -1526,6 +1902,13 @@ function setToolStates(){
   tools.color.classList.toggle('on', uniqueColors);
   tools.shadow.classList.toggle('on', shadowsOn);
   tools.view.classList.toggle('on', thirdPerson);
+  tools.view.textContent = thirdPerson ? '✕ first view' : (avatarMode==="kinesin" ? '🧬 avatar view' : '🚌 bus view');
+  tools.skate.classList.toggle('on', skate.active || boardAir.active);
+  tools.skate.textContent = skate.active ? '✕ detach' : boardAir.active ? '↧ air' : '🛹 skateboard';
+  tools.avatar.classList.toggle('on', avatarMode==="kinesin");
+  tools.avatar.textContent = avatarMode==="kinesin" ? '🧬 kinesin' : '🚌 bus';
+  tools.shrink.textContent = '- '+Math.round(avatarScale*100)+'%';
+  tools.grow.textContent = '+ '+Math.round(avatarScale*100)+'%';
 }
 function toggleNarration(){ narrationOn=!narrationOn; if(!narrationOn && 'speechSynthesis' in window) speechSynthesis.cancel(); setToolStates();
   if(narrationOn) narrate("Narration on! I'm your guide — drive close to anything and I'll tell you what it is."); }
@@ -1537,6 +1920,10 @@ tools.amb.onclick = ()=> setAmbience();
 tools.color.onclick = ()=> toggleColors();
 tools.shadow.onclick = ()=> toggleShadows();
 tools.view.onclick = toggleView;
+tools.skate.onclick = toggleSkateMode;
+tools.avatar.onclick = cycleAvatar;
+tools.shrink.onclick = ()=> resizeAvatar(-1);
+tools.grow.onclick = ()=> resizeAvatar(1);
 
 // mesh-detail slider: caps how fine LODs may load (full = current behaviour; lower = coarser)
 const resSlider=document.getElementById('resSlider'), resVal=document.getElementById('resVal');
@@ -1546,7 +1933,7 @@ if(resSlider) resSlider.addEventListener('input', ()=>{
 });
 
 // ---- scan state --------------------------------------------------
-let scanProgress=0, scanMesh=null;
+let scanProgress=0, scanMesh=null, scanCooldown=0;
 
 // 3D direction sphere: place the dot as the orthographic projection of the target direction onto
 // the camera's screen plane. Centre = dead ahead; rim = 90° to the side/up/down; when the target
@@ -1569,8 +1956,10 @@ const clock = new THREE.Clock();
 function tick(){
   raf = requestAnimationFrame(tick);
   const dt = Math.min(clock.getDelta(), 0.05);
+  scanCooldown = Math.max(0, scanCooldown-dt);
 
-  const anyMove = keys['KeyW']||keys['KeyS']||keys['KeyA']||keys['KeyD']||keys['KeyR']||keys['KeyF'];
+  const anyDrive = keys['KeyW']||keys['KeyS']||keys['KeyA']||keys['KeyD'];
+  const anyMove = anyDrive||keys['KeyR']||keys['KeyF'];
   if(touring && anyMove) stopTour();     // grabbing the wheel cancels the tour
   if(touring) updateTour(dt);            // auto-drives, sets yaw/pitch + playerPos
 
@@ -1581,17 +1970,23 @@ function tick(){
 
   if(!touring){
     const boost=(keys['ShiftLeft']||keys['ShiftRight'])?2.8:1;
-    const accel=64*boost;   // gentler thrust; the bus carries its momentum
-    if(keys['KeyW']) vel.addScaledVector(fwd, accel*dt);
-    if(keys['KeyS']) vel.addScaledVector(fwd,-accel*dt);
-    if(keys['KeyD']) vel.addScaledVector(right, accel*dt);
-    if(keys['KeyA']) vel.addScaledVector(right,-accel*dt);
-    if(keys['KeyR']) vel.addScaledVector(WORLD_UP, accel*dt);
-    if(keys['KeyF']) vel.addScaledVector(WORLD_UP,-accel*dt);
-    // momentum: light damping so the bus glides and coasts to a stop
-    vel.multiplyScalar(anyMove ? 0.96 : 0.975);
-    if(!anyMove && vel.lengthSq() < 0.0004) vel.set(0,0,0);   // settle fully when idle
-    playerPos.addScaledVector(vel, dt);
+    if(skate.active){
+      updateSkate(dt, boost, anyDrive);
+    } else {
+      const accel=(boardAir.active?18:52)*boost*avatarMoveScale();   // gentler thrust; smaller avatars move slower for close inspection
+      updateBoardAir(dt);
+      if(keys['KeyW']) vel.addScaledVector(fwd, accel*dt);
+      if(keys['KeyS']) vel.addScaledVector(fwd,-accel*dt);
+      if(keys['KeyD']) vel.addScaledVector(right, accel*dt);
+      if(keys['KeyA']) vel.addScaledVector(right,-accel*dt);
+      if(!boardAir.active && keys['KeyR']) vel.addScaledVector(WORLD_UP, accel*dt);
+      if(!boardAir.active && keys['KeyF']) vel.addScaledVector(WORLD_UP,-accel*dt);
+      // momentum: light damping so the bus glides and coasts to a stop
+      vel.multiplyScalar(anyMove ? 0.96 : 0.975);
+      if(!anyMove && vel.lengthSq() < 0.0004) vel.set(0,0,0);   // settle fully when idle
+      playerPos.addScaledVector(vel, dt);
+      tryBoardAirLand(dt);
+    }
   }
 
   // soft containment
@@ -1600,13 +1995,30 @@ function tick(){
 
   // place the camera + bus for the active view
   if(thirdPerson && bus){
+    const camUp = skate.active && skate.side==="outside" ? skate.normal : WORLD_UP;
+    const camScale = Math.max(0.72, Math.sqrt(avatarScale));
     const lat = vel.dot(right);
     busRoll += (Math.max(-0.5,Math.min(0.5,-lat*0.045)) - busRoll)*(1-Math.pow(0.002,dt));  // bank into turns
-    bus.visible=true; bus.position.copy(playerPos); bus.quaternion.copy(qLook); bus.rotateZ(busRoll);
-    camera.position.copy(playerPos).addScaledVector(fwd,-10).addScaledVector(WORLD_UP,3.6).addScaledVector(right,0.4);
-    camera.lookAt(playerPos.clone().addScaledVector(fwd,8));
+    bus.visible=true; bus.position.copy(playerPos);
+    if(skate.active){
+      const surfF=_sk0.copy(skate.forward).projectOnPlane(skate.normal);
+      if(surfF.lengthSq()<1e-4) surfF.copy(vel).projectOnPlane(skate.normal);
+      if(surfF.lengthSq()<1e-4) surfF.copy(right).projectOnPlane(skate.normal);
+      surfF.normalize();
+      const zAxis=_sk1.copy(surfF).negate();
+      const xAxis=_sk2.crossVectors(skate.normal,zAxis).normalize();
+      _skMat.makeBasis(xAxis, skate.normal, zAxis);
+      bus.quaternion.setFromRotationMatrix(_skMat);
+      bus.rotateZ(skate.lean);
+    } else {
+      bus.quaternion.copy(qLook); bus.rotateZ(busRoll);
+    }
+    camera.up.copy(camUp);
+    camera.position.copy(playerPos).addScaledVector(fwd,-10*camScale).addScaledVector(camUp, (skate.active?6:3.6)*camScale).addScaledVector(right,0.4*camScale);
+    camera.lookAt(playerPos.clone().addScaledVector(fwd,8).addScaledVector(camUp, skate.active?1.2:0));
   } else {
     if(bus) bus.visible=false;
+    camera.up.copy(skate.active && skate.side==="outside" ? skate.normal : WORLD_UP);
     camera.position.copy(playerPos);
     camera.quaternion.copy(qLook);
   }
@@ -1643,7 +2055,7 @@ function tick(){
     if(candMesh!==scanMesh){ scanMesh=candMesh; scanProgress=0; }
     const inRange=!!candMesh;
     ui.cross.classList.toggle('lock', inRange);
-    if(inRange && keys['Space']){
+    if(inRange && keys['Space'] && scanCooldown<=0 && !skate.active){
       scanProgress = Math.min(1, scanProgress + dt/1.1);
       ui.obj.classList.add('scanning');
       ui.scanbar.style.opacity=1; ui.scanfill.style.width=(scanProgress*100).toFixed(0)+'%';
@@ -1661,6 +2073,8 @@ function tick(){
       const nm=candType?(ORG[candType]?ORG[candType].name:candType):null;
       ui.objHint.innerHTML = nm
         ? `hold <b style="color:#dfe9f5">SPACE</b> to analyze <b style="color:#9dffb0">${nm}</b>`
+        : skate.active
+          ? `${skate.side} boarding <b style="color:#9dffb0">${skateRootName(skate.root)}</b> · <b style="color:#dfe9f5">SPACE/R</b> jump · <b style="color:#dfe9f5">X</b> detach`
         : `fly up to any organelle, then hold <b style="color:#dfe9f5">SPACE</b> to analyze`;
     }
   }
@@ -1687,7 +2101,7 @@ function tick(){
   lodActiveTime = lodLoading>0 ? lodActiveTime+dt : 0;
   ui.stream.classList.toggle('hidden', lodActiveTime < 0.6);
   ui.depth.textContent = (CELL_R - playerPos.length()).toFixed(0)+" nm*";
-  ui.speed.textContent = vel.length().toFixed(1);
+  ui.speed.textContent = vel.length().toFixed(1)+(skate.active?" board":boardAir.active?" air":"");
 
   renderer.render(scene,camera);
 }
