@@ -85,7 +85,7 @@ def main():
         geom.apply_scale(SCALE)
 
     scene.export(OUT)
-    print(f"\nwrote {OUT} — drop it next to cellgame.html and load via GLTFLoader.")
+    print(f"\nwrote {OUT} — drop it next to celldive.html and load via GLTFLoader.")
     print("REMINDER: confirm the dataset's license (CC variant) before distributing.")
 
 

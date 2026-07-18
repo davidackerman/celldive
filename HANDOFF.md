@@ -4,7 +4,7 @@ A browser game: shrink to nanoscale and fly through a real FIB-SEM cell
 reconstruction from Janelia's public **OpenOrganelle / CellMap** archive
 (`s3://janelia-cosem-datasets`), analyzing its organelles.
 
-## What's playable now — `cellgame.html` (single self-contained file)
+## What's playable now — `celldive.html` (single self-contained file)
 
 Open it in any browser (it loads Three.js r128 from a CDN; no build step).
 
@@ -99,10 +99,10 @@ Verified end-to-end in headless Chrome: live catalog loads (93 cards), real mesh
 and render (`jrc_hela-2` → 42 meshes), fly-to-lock + SPACE-analyze works in both real and
 procedural mode, mesh-less specimens fall back cleanly.
 
-`cellgame_old.html` is the original procedural-only prototype. `mesh_probe.html` is a
+`celldive_old.html` is the original procedural-only prototype. `mesh_probe.html` is a
 standalone single-segment mesh-decode harness (useful for debugging the loader in isolation).
 
-## How the in-browser mesh loader works (the core of it, in `cellgame.html`)
+## How the in-browser mesh loader works (the core of it, in `celldive.html`)
 The published meshes are neuroglancer **unsharded** `multilod_draco`. Per organelle layer:
 `info` (transform + `vertex_quantization_bits`), and per segment a `<id>.index` manifest +
 `<id>` data blob. The loader (`loadSegmentCoarse` / `parseManifest` / `dracoDecode`):

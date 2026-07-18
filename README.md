@@ -4,11 +4,11 @@ CELLDIVE is a single-file browser game for exploring real cell reconstructions f
 
 Play it here:
 
-https://davidackerman.github.io/cellgame/
+https://davidackerman.github.io/celldive/
 
 ## Run Locally
 
-Open `cellgame.html` in a browser. There is no build step.
+Open `celldive.html` in a browser. There is no build step.
 
 The game loads Three.js from a CDN and streams public CellMap/OpenOrganelle mesh data directly in the browser.
 
@@ -26,7 +26,7 @@ The game loads Three.js from a CDN and streams public CellMap/OpenOrganelle mesh
 
 ## Files
 
-- `cellgame.html`: the playable game
-- `cellgame_old.html`: older prototype
+- `celldive.html`: the playable game
+- `celldive_old.html`: older prototype
 - `mesh_probe.html`: mesh loading/debug harness
 - `fetch_mesh.py`: mesh utility script
