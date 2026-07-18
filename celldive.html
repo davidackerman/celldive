@@ -102,13 +102,24 @@
     font-size:11px;letter-spacing:.03em;white-space:nowrap}
   #help b{color:var(--ink);font-weight:600}
 
-  #cross{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;
-    pointer-events:none;opacity:.7;transition:opacity .15s}
-  #cross.lock{opacity:1}
-  #cross:before,#cross:after{content:"";position:absolute;background:var(--accent)}
-  #cross:before{left:9px;top:0;width:1px;height:20px}
-  #cross:after{top:9px;left:0;height:1px;width:20px}
-  #cross.lock:before,#cross.lock:after{background:var(--warn)}
+  #cross{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;
+    pointer-events:none;opacity:.9;border:1.5px solid rgba(233,242,255,.5);border-radius:50%;
+    box-sizing:border-box;transition:opacity .15s,transform .12s,border-color .15s;
+    filter:drop-shadow(0 0 1.5px rgba(0,0,0,.9));
+    background:radial-gradient(circle at center,#eaf2ff 0 1.4px,transparent 1.7px)}  /* centre dot */
+  #cross.lock{opacity:1;transform:scale(1.15);border-color:#3dff9a;
+    background:radial-gradient(circle at center,#3dff9a 0 1.7px,transparent 2px)}
+  /* white cross-hair ticks with a dark outline so they read over any organelle colour */
+  #cross:before,#cross:after{content:"";position:absolute;background:#eaf2ff;box-shadow:0 0 3px rgba(0,0,0,.95)}
+  #cross:before{left:50%;margin-left:-1px;top:50%;margin-top:-13px;width:2px;height:26px}
+  #cross:after{top:50%;margin-top:-1px;left:50%;margin-left:-13px;height:2px;width:26px}
+  #cross.lock:before,#cross.lock:after{background:#3dff9a;box-shadow:0 0 7px #3dff9a}
+  /* neuroglancer-style hover label: name + segment id, just under the crosshair */
+  #hoverlabel{position:absolute;left:50%;top:calc(50% + 22px);transform:translateX(-50%);
+    pointer-events:none;white-space:nowrap;font-size:11px;letter-spacing:.04em;
+    color:#eaf2ff;background:rgba(6,10,18,.72);border:1px solid rgba(140,180,255,.28);
+    border-radius:5px;padding:2px 8px;text-shadow:0 0 3px rgba(0,0,0,.9)}
+  #hoverlabel .id{color:#8fb6ff;margin-left:5px}
 
   #flash{position:absolute;left:50%;top:34%;transform:translateX(-50%);
     font-size:16px;letter-spacing:.16em;text-transform:uppercase;color:var(--good);
@@ -201,6 +212,7 @@
   <div id="app"></div>
 
   <div id="cross"></div>
+  <div id="hoverlabel" class="hidden"></div>
   <div id="scanbar"><i></i></div>
   <div id="flash"></div>
 
@@ -696,6 +708,15 @@ async function meshMeta(id, layer, seg){
 }
 function coarsestLOD(man){ let L=man.num_lods-1; while(L>0 && man.lods[L].frags.every(f=>f.size===0)) L--; return L; }
 function lodBytes(man, L){ return man.lods[L].frags.reduce((s,f)=>s+f.size,0); }
+// a "medium" LOD: about halfway down the pyramid (leaning finer), never finer than the detail
+// slider allows and never over the per-LOD byte budget. Used as the DEFAULT quality a mesh loads
+// at (and rests at when far), instead of the blocky coarsest level.
+function mediumLOD(man, coarse){
+  let L=Math.max(resCap, Math.min(coarse, Math.floor(coarse/2)));
+  while(L<coarse && lodBytes(man,L)===0) L++;          // land on a populated level (empties cluster coarse)
+  while(L<coarse && lodBytes(man,L)>LOD_BUDGET) L++;   // don't exceed the byte budget
+  return L;
+}
 
 // decode ONE level of detail of a segment -> {posNm:Float32Array, idx:number[]}.
 // Like neuroglancer, each LOD's fragments are octree chunks; here we pull the whole
@@ -814,7 +835,10 @@ async function loadRealOrganelles(id, onProgress){
   let done=0;
   const loaded = await pool(jobs, 12, async(j)=>{
     let r=null, meta=null;
-    try{ meta=await meshMeta(id, j.cl.layer, j.seg); meta._L0 = meta.legacy?0:coarsestLOD(meta.man); r=await loadLOD(draco, meta, meta._L0); }
+    try{ meta=await meshMeta(id, j.cl.layer, j.seg);
+      meta._L0 = meta.legacy?0:coarsestLOD(meta.man);              // coarsest level available
+      meta._Linit = meta.legacy?0:mediumLOD(meta.man, meta._L0);   // default: load medium, not coarsest
+      r=await loadLOD(draco, meta, meta._Linit); }
     catch(e){ r=null; }
     onProgress(`decoding real meshes… ${++done}/${jobs.length}`);
     return r ? {type:j.cl.type, posNm:r.posNm, idx:r.idx, meta} : null;
@@ -841,7 +865,7 @@ async function loadRealOrganelles(id, onProgress){
     mesh.userData.center = g.boundingSphere.center.clone();  // world-space (mesh stays at origin)
     mesh.userData.real = true;
     mesh.userData.meta = o.meta;        // {base,seg,info,man,_L0}
-    mesh.userData.lod = o.meta._L0;     // current level of detail (starts coarsest)
+    mesh.userData.lod = o.meta._Linit;  // current level of detail (starts at medium)
     mesh.userData.loading = false;
     entries.push({type:o.type, mesh});
   }
@@ -851,9 +875,11 @@ async function loadRealOrganelles(id, onProgress){
 // choose a target LOD for an organelle from its distance (closer => finer => lower index),
 // clamped so we never go finer than the byte budget. Mirrors ng's projected-size idea.
 function pickLOD(meta, dist, r){
-  const man=meta.man, coarse=meta._L0;
+  // rest at MEDIUM (meta._Linit) when far, refine toward resCap as you approach — never coarser than
+  // medium, so nothing degrades to the blocky coarsest level once loaded.
+  const man=meta.man, coarse=(meta._Linit!=null?meta._Linit:meta._L0);
   let want = Math.round(Math.log2(Math.max(dist,0.01)/Math.max(r*0.6,0.01)));
-  want = Math.min(coarse, Math.max(resCap, want));   // detail slider caps how fine we go (never finer than resCap, never coarser than the coarsest level)
+  want = Math.min(coarse, Math.max(resCap, want));   // detail slider caps how fine we go (never finer than resCap, never coarser than medium)
   while(want<coarse && lodBytes(man,want)>LOD_BUDGET) want++;
   return want;
 }
@@ -933,6 +959,8 @@ function clearScene(){
   if(raf) cancelAnimationFrame(raf), raf=0;
   if(renderer){ renderer.dispose(); if(renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); }
   scene=null; targets=[]; decor=[]; dust=null; marker=null;
+  if(pickTarget){ pickTarget.dispose(); pickTarget=null; } aimHit=null; pickTimer=0;
+  hoverMesh=null; _hoverSaved.length=0;
   currentFit=null; lodLoading=0; lodTimer=0; questActive=false;
   skate.active=false; skate.root=null; skate.type=null; skate.side="outside"; skate.forward.set(0,0,-1); skate.gravity.copy(WORLD_DOWN); skate.lean=0; skate.grace=0;
   boardAir.active=false; boardAir.root=null; boardAir.side="outside"; boardAir.normal.set(0,1,0); boardAir.gravity.copy(WORLD_DOWN); boardAir.age=0; boardAir.cooldown=0;
@@ -1277,6 +1305,7 @@ function colorKey(m){
   return m.userData.real ? (parseInt(m.userData.meta.seg,10) || m.userData.uid||0) : (m.userData.uid||0);
 }
 function applyColors(){
+  clearHover();   // drop the hover glow before recolouring; it re-applies next frame
   [...targets.map(t=>t.mesh), ...decor].forEach(m=>{
     const o = ORG[m.userData.type] || {color:0x9aa6b8, emissive:0x14171f};
     const hue = segHue(colorKey(m));
@@ -1847,6 +1876,7 @@ const ui = {
   specWho:document.getElementById('specWho'), specSrc:document.getElementById('specSrc'),
   compDot:document.getElementById('compDot'),
   compDist:document.getElementById('compDist'), cross:document.getElementById('cross'),
+  hoverlabel:document.getElementById('hoverlabel'),
   scanbar:document.getElementById('scanbar'), scanfill:document.querySelector('#scanbar > i'),
   stream:document.getElementById('stream'), layersBody:document.getElementById('layersBody'),
 };
@@ -1932,8 +1962,109 @@ if(resSlider) resSlider.addEventListener('input', ()=>{
   const v=+resSlider.value; resCap=6-v; resVal.textContent=RES_LABELS[v]||v;
 });
 
+// ---- target picking ----------------------------------------------
+const REACH=16;               // how close (to the surface) you must be to analyze by proximity
+const ANALYZE_RANGE=45;       // how far you can analyze the exact surface you're aiming at (GPU pick)
+const _gate=new THREE.Vector3();
+// distance from the player to a mesh's SURFACE (bounding-sphere), not its centroid — so a big
+// sprawling organelle doesn't read as "right here" just because its centre is near.
+function surfDist(m){ const c=m.userData.center||m.position; const r=(m.userData.reachR||m.userData.r||8);
+  return Math.max(0, playerPos.distanceTo(c)-r); }
+// GPU PICKING (neuroglancer-style): render every pickable mesh in a unique flat colour keyed to its
+// segment uid, into a 1×1 offscreen buffer aimed at the crosshair pixel, then read that pixel back.
+// Pixel-exact, honours the REAL geometry + occlusion (frontmost surface wins), and costs the same no
+// matter how many triangles a mesh has streamed to — unlike CPU raycasting a BVH-less r128 mesh.
+let pickTarget=null;
+const _pickBuf=new Uint8Array(4), _pickSaved=[], _pickClear=new THREE.Color();
+function collectPickRoots(){
+  const out=[];
+  targets.forEach(t=>{ if(isVisibleObject(t.mesh) && t.mesh.userData.uid!=null) out.push(t.mesh); });
+  decor.forEach(m=>{ if(isVisibleObject(m) && m.userData.uid!=null) out.push(m); });
+  return out;
+}
+function gpuPick(){
+  if(!renderer||!scene||!camera) return null;
+  const roots=collectPickRoots(); if(!roots.length) return null;
+  if(!pickTarget) pickTarget=new THREE.WebGLRenderTarget(1,1);
+  const byUid=new Map();
+  _pickSaved.length=0;
+  for(const root of roots){
+    const uid=root.userData.uid;
+    byUid.set(uid, {mesh:root, type:root.userData.type});
+    let pm=root.userData._pickMat;
+    if(!pm){ pm=root.userData._pickMat=new THREE.MeshBasicMaterial({side:THREE.DoubleSide}); pm.toneMapped=false; pm.fog=false; }
+    pm.color.setHex(uid & 0xffffff);                        // encode uid in RGB (24 bits)
+    root.traverse(o=>{ if(o.isMesh){ _pickSaved.push([o, o.material]); o.material=pm; } });
+  }
+  // hide EVERYTHING that isn't a pickable organelle (membrane shell, dust, bus, marker, …) so ONLY
+  // id-coloured meshes render into the pick buffer. Otherwise their real material colour lands in the
+  // pixel and decodes to a bogus segment id — the membrane, always in the background, is the big one.
+  const pickSet=new Set(roots), hid=[];
+  for(const ch of scene.children){
+    if(ch.isLight || ch.isCamera || pickSet.has(ch)) continue;
+    if(ch.visible){ ch.visible=false; hid.push(ch); }
+  }
+  const w=renderer.domElement.width, h=renderer.domElement.height;
+  camera.setViewOffset(w, h, (w>>1), (h>>1), 1, 1);         // render only the centre pixel
+  const prev=renderer.getRenderTarget();
+  renderer.getClearColor(_pickClear); const prevAlpha=renderer.getClearAlpha();
+  renderer.setRenderTarget(pickTarget);
+  renderer.setClearColor(0x000000, 1); renderer.clear();
+  renderer.render(scene, camera);
+  renderer.readRenderTargetPixels(pickTarget, 0, 0, 1, 1, _pickBuf);
+  renderer.setRenderTarget(prev);
+  renderer.setClearColor(_pickClear, prevAlpha);            // restore the view's clear colour
+  camera.clearViewOffset();
+  for(const [o,mat] of _pickSaved) o.material=mat;          // restore real materials
+  _pickSaved.length=0;
+  hid.forEach(o=>o.visible=true);
+  // decode must mirror Color.setHex byte order: R=high, B=low  (buf is [R,G,B,A])
+  const uid=(_pickBuf[0]<<16) | (_pickBuf[1]<<8) | _pickBuf[2];
+  return uid ? (byUid.get(uid)||null) : null;               // uid 0 = empty (crosshair on nothing)
+}
+
+// LIVE HOVER HIGHLIGHT (neuroglancer-style): glow whichever mesh the crosshair is over, instantly.
+// We only modulate emissive (colour + intensity) and remember the originals, so it composes with the
+// layer colouring and restores cleanly. Driven by the GPU pick, so it tracks the true surface.
+let hoverMesh=null;
+const _hoverSaved=[], HILITE=new THREE.Color(0xdff0ff);
+function clearHover(){
+  for(const s of _hoverSaved){ s.mat.emissive.setHex(s.hex); s.mat.emissiveIntensity=s.ei; }
+  _hoverSaved.length=0; hoverMesh=null;
+}
+function setHover(mesh){
+  if(mesh===hoverMesh) return;
+  clearHover();
+  hoverMesh=mesh;
+  if(mesh) mesh.traverse(o=>{ if(o.isMesh && o.material && o.material.emissive){
+    _hoverSaved.push({mat:o.material, hex:o.material.emissive.getHex(), ei:o.material.emissiveIntensity});
+    o.material.emissive.lerp(HILITE, 0.35);      // push the glow toward a highlight tint
+    o.material.emissiveIntensity=0.95;
+  }});
+}
+// nearest (by surface distance) visible instance of a type — objectives point at whichever one
+// is closest, not the single largest.
+function nearestInstanceMesh(type){
+  let best=null, bd=1e30;
+  const consider=m=>{ if(!m||m.userData.type!==type||!isVisibleObject(m)) return;
+    const s=surfDist(m); if(s<bd){ bd=s; best=m; } };
+  targets.forEach(t=>consider(t.mesh)); decor.forEach(consider);
+  return best;
+}
+// a point to aim the marker at: the near face of the mesh's bounding sphere, toward the player
+// (cheap, no raycast). Keeps the reticle off the empty geometric centre of a big/hollow mesh
+// while flying you toward the side of it that faces you.
+const _npDir=new THREE.Vector3(), _npPt=new THREE.Vector3();
+function surfacePointToward(mesh){
+  const c=mesh.userData.center||mesh.position, r=(mesh.userData.reachR||mesh.userData.r||8);
+  _npDir.copy(c).sub(playerPos); const d=_npDir.length();
+  if(d<=r) return _npPt.copy(c).clone();                    // inside the sphere → just use the centre
+  return _npPt.copy(playerPos).addScaledVector(_npDir.divideScalar(d), d-r).clone();
+}
+
 // ---- scan state --------------------------------------------------
 let scanProgress=0, scanMesh=null, scanCooldown=0;
+let pickTimer=0, aimHit=null;        // GPU-pick is throttled; aimHit caches the last result
 
 // 3D direction sphere: place the dot as the orthographic projection of the target direction onto
 // the camera's screen plane. Centre = dead ahead; rim = 90° to the side/up/down; when the target
@@ -1981,8 +2112,10 @@ function tick(){
       if(keys['KeyA']) vel.addScaledVector(right,-accel*dt);
       if(!boardAir.active && keys['KeyR']) vel.addScaledVector(WORLD_UP, accel*dt);
       if(!boardAir.active && keys['KeyF']) vel.addScaledVector(WORLD_UP,-accel*dt);
-      // momentum: light damping so the bus glides and coasts to a stop
-      vel.multiplyScalar(anyMove ? 0.96 : 0.975);
+      // momentum: light damping so the bus glides and coasts to a stop. Frame-rate INDEPENDENT
+      // (pow by dt*60) — otherwise a lower framerate applies the per-frame factor fewer times per
+      // second and the craft drifts much further.
+      vel.multiplyScalar(Math.pow(anyMove ? 0.96 : 0.975, dt*60));
       if(!anyMove && vel.lengthSq() < 0.0004) vel.set(0,0,0);   // settle fully when idle
       playerPos.addScaledVector(vel, dt);
       tryBoardAirLand(dt);
@@ -2032,26 +2165,56 @@ function tick(){
   // objective + scan  (Cargo Run takes over the objective panel while active)
   let activeTargetPos = null;
   if(questActive){
+    clearHover(); ui.hoverlabel.classList.add('hidden');   // no free-look hover UI during the cargo run
     updateCargoTick(dt);
     activeTargetPos = questTargetPoint(questStages[questStage]);
   } else {
-    // the suggested next objective drives the compass
+    // the suggested next objective drives the compass — aim at the NEAREST instance of the needed
+    // type, and at a point on its actual surface (not the empty geometric centre of a big mesh).
     if(objIdx<targets.length){
-      const ot=targets[objIdx], otc=ot.center||ot.mesh.position;
+      const inst = nearestInstanceMesh(targets[objIdx].type) || targets[objIdx].mesh;
+      const otc = surfacePointToward(inst);
       setCompass(otc);
       ui.compDist.textContent = playerPos.distanceTo(otc).toFixed(0)+" units";
       activeTargetPos = otc;
     } else { ui.compDist.textContent='—'; }
 
-    // SPACE analyzes ANY organelle you're nearest to — every loaded mesh, not just the objectives
-    let candMesh=null, candType=null, cd=1e9;
-    const consider=(m,type)=>{ if(!m||!type) return;
-      const c=m.userData.center||m.position; const d=playerPos.distanceTo(c);
-      let reach=(m.userData.reachR||m.userData.r||8)+16;
-      if(m===scanMesh && scanProgress>0) reach*=1.5;   // sticky: keep an in-progress scan locked at the edge
-      if(d<reach && d<cd){ candMesh=m; candType=type; cd=d; } };
-    for(const t of targets) consider(t.mesh, t.type);
-    for(const m of decor)   consider(m, m.userData.type);
+    // SPACE analyzes exactly what the crosshair is on, decided by a GPU pick (throttled — a 1px
+    // readback stalls the pipeline, so ~20 Hz is plenty for a centre crosshair). Falls back to the
+    // nearest surface only when you're aiming at empty space. Gated by REACH so you still fly up.
+    pickTimer-=dt; if(pickTimer<=0){ pickTimer=0.05; aimHit=gpuPick(); }
+    setHover(aimHit ? aimHit.mesh : null);       // glow whatever the crosshair is over, live
+    if(aimHit && aimHit.mesh){                    // neuroglancer-style label: name + real segment id
+      const nm=ORG[aimHit.type]?ORG[aimHit.type].name:aimHit.type, ud=aimHit.mesh.userData;
+      const id=(ud.real && ud.meta)?ud.meta.seg:ud.uid;
+      ui.hoverlabel.innerHTML=`${nm}<span class="id">${id}</span>`;
+      ui.hoverlabel.classList.remove('hidden');
+    } else ui.hoverlabel.classList.add('hidden');
+    let candMesh=null, candType=null;
+    // sticky: keep an in-progress scan locked while it's still roughly in reach, even if aim drifts
+    if(scanMesh && scanProgress>0 && isVisibleObject(scanMesh) && surfDist(scanMesh) < REACH*1.5){
+      candMesh=scanMesh; candType=scanMesh.userData.type;
+    }
+    // otherwise: the mesh under the crosshair, if you're within analyze range of the surface you see.
+    // Gate on the distance to where the aim ray meets that mesh (its bounding-sphere entry) — NOT the
+    // sphere-surface distance, which was rejecting a mito you're clearly pointing at and letting the
+    // fallback grab the nucleus you happen to be inside.
+    if(!candMesh && aimHit && aimHit.mesh && isVisibleObject(aimHit.mesh)){
+      const m=aimHit.mesh, c=m.userData.center||m.position, r=(m.userData.reachR||m.userData.r||8);
+      _gate.copy(c).sub(playerPos);
+      const t=_gate.dot(fwd), oc2=_gate.lengthSq(), perp2=oc2-t*t;
+      const hitDist = oc2<r*r ? 0 : (perp2<r*r ? Math.max(0,t-Math.sqrt(r*r-perp2)) : Math.max(0,t));
+      if(hitDist < ANALYZE_RANGE){ candMesh=m; candType=aimHit.type; }
+    }
+    // otherwise, only if the crosshair is on EMPTY space (no pick hit at all): nearest surface in
+    // reach. If you ARE aiming at a mesh but it's out of range, we pick nothing — you fly closer,
+    // rather than silently snapping to the giant organelle you happen to be inside.
+    if(!candMesh && !aimHit){ let cd=REACH;
+      const consider=(m,type)=>{ if(!m||!type||!isVisibleObject(m)) return;
+        const s=surfDist(m); if(s<cd){ candMesh=m; candType=type; cd=s; } };
+      for(const t of targets) consider(t.mesh, t.type);
+      for(const m of decor)   consider(m, m.userData.type);
+    }
     if(candMesh!==scanMesh){ scanMesh=candMesh; scanProgress=0; }
     const inRange=!!candMesh;
     ui.cross.classList.toggle('lock', inRange);
