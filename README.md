@@ -14,13 +14,21 @@ The game loads Three.js from a CDN and streams public CellMap/OpenOrganelle mesh
 
 ## Controls
 
-- `W` / `S`: thrust and brake
-- `A` / `D`: steer or carve
-- Drag: look around
-- `Shift`: boost
-- `Space`: analyze nearby organelles, or jump while boarding
-- `X`: board or detach
-- `V`: toggle avatar view
+Pick **flight** (free-fly, no gravity) or **jetpack** (gravity + fuel-limited thrust + a
+mesh-cutting laser) before diving in — switch either way anytime from the in-dive menu.
+
+- Mouse: look around (`Esc` releases the cursor anytime)
+- `W` / `A` / `S` / `D`: move (fly/strafe in flight mode; thrust/carve while boarding or
+  walking a surface)
+- `R` / `F`: up / down (flight mode)
+- `Shift`: boost, or analyze the nearest organelle when held
+- `Space`: jetpack thrust (jetpack mode), or jump while boarding/walking
+- Click: fire the laser (jetpack mode)
+- `X`: mount/detach a skateboard, or latch onto a surface to walk it
+- Scroll: adjust the torch's brightness
+- `Tab`: open the menu — organelle layers, detail level, narration, guided tour, avatar,
+  and more
+- `V`: toggle third-person view
 - `K`: switch avatar
 - `[` / `]`: resize avatar
 
