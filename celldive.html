@@ -2157,7 +2157,7 @@ appEl.addEventListener('pointerleave', ()=> fireHeld=false);
 // each tick — a deliberate slight lag rather than a hard snap — instead of updating the look
 // angle directly on every event.
 appEl.addEventListener('pointermove', e=>{
-  if(uiFree){ haveLastPos=false; return; }
+  if(uiFree || awaitingFirstClick){ haveLastPos=false; return; }
   let dx, dy;
   if(pointerLocked){ dx=e.movementX||0; dy=e.movementY||0; }
   else{
@@ -3005,6 +3005,7 @@ function tick(){
   const dt = Math.min(clock.getDelta(), 0.05);   // keep the clock moving even while paused, so
   // resuming doesn't see one huge dt covering the whole time the menu was up
   if(uiFree){ renderer.render(scene,camera); return; }   // TAB menu is up — world is fully paused
+  if(awaitingFirstClick){ renderer.render(scene,camera); return; }   // hasn't clicked "begin" yet — nothing moves or looks around
   scanCooldown = Math.max(0, scanCooldown-dt);
 
   const anyDrive = keys['KeyW']||keys['KeyS']||keys['KeyA']||keys['KeyD'];
