@@ -1165,10 +1165,10 @@ async function fetchJson(url){
   return r.json();
 }
 // respect a pasted neuroglancer link's own per-layer look (Feature 2's "specify the view you'd
-// want"): fixed per-segment colors, a fixed layer default color, or its own colour-seed hash —
-// ported bit-for-bit from neuroglancer's own SegmentColorHash.compute() (src/segment_color.ts),
-// reusing murmur() (already identical to its hashCombine — verified against the actual source),
-// so a seed the user picked in neuroglancer reproduces the same colors here.
+// want"): fixed per-segment colors, a fixed layer default color, or its own colour-seed hash,
+// then the layer's saturation — ported bit-for-bit from neuroglancer's own SegmentColorHash.compute()
+// (src/segment_color.ts), reusing murmur() (already identical to its hashCombine — verified against
+// the actual source), so a seed the user picked in neuroglancer reproduces the same colors here.
 function hsvToRgbArr(h,s,v){
   const i=Math.floor(h*6)%6, f=h*6-Math.floor(h*6);
   const p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
@@ -1187,9 +1187,15 @@ function ngSegmentColor(seed, idBig){
 }
 function resolveSegmentColor(layer, idStr){
   const fixed = layer && layer.segmentColors && layer.segmentColors[idStr];
-  if(fixed) return new THREE.Color(fixed);
-  if(layer && layer.segmentDefaultColor) return new THREE.Color(layer.segmentDefaultColor);
-  return ngSegmentColor((layer && layer.segmentColorHash) || 0, BigInt(idStr));
+  const base = fixed ? new THREE.Color(fixed)
+    : (layer && layer.segmentDefaultColor) ? new THREE.Color(layer.segmentDefaultColor)
+    : ngSegmentColor((layer && layer.colorSeed) || 0, BigInt(idStr));
+  // neuroglancer's own "saturation" layer control (default 1, a no-op) applies to ALL three
+  // color sources above, not just the hash — it's a straight lerp toward white, e.g. saturation:0
+  // (common on ROI/reference layers) washes a segment out to flat white regardless of its hue.
+  const sat = (layer && typeof layer.saturation==='number') ? layer.saturation : 1;
+  if(sat!==1) base.setRGB(base.r*sat+(1-sat), base.g*sat+(1-sat), base.b*sat+(1-sat));
+  return base;
 }
 // id -> {label, description, tags:[...], ...} for one segmentation source's segment_properties,
 // cached per (base, relDir) since several selected segments usually share one source.
@@ -1214,8 +1220,9 @@ function fetchSegmentProperties(base, relDir){
 // returns [{type, mesh}] like loadRealOrganelles, so addRealOrganelles/the layer panel/LOD
 // streaming/GPU-pick all work unmodified — only the loading strategy differs.
 async function loadCustomOrganelles(state, onProgress){
+  // a layer the user toggled off in neuroglancer (visible:false) shouldn't reappear here
   const layers = (state.layers||[]).filter(l=>
-    l.type==='segmentation' && !l.archived && Array.isArray(l.segments) && l.segments.length);
+    l.type==='segmentation' && l.visible!==false && !l.archived && Array.isArray(l.segments) && l.segments.length);
   if(!layers.length) return null;
   const draco = await ensureDraco();
   onProgress('resolving neuroglancer source(s)…');
@@ -1231,14 +1238,24 @@ async function loadCustomOrganelles(state, onProgress){
     if(!segIds.length) continue;
     const props = info.segment_properties ? await fetchSegmentProperties(base, info.segment_properties) : null;
     // objectAlpha is neuroglancer's own mesh-opacity field for this layer; segmentColors/
-    // segmentDefaultColor/segmentColorHash (resolved per-segment below) are its color controls.
+    // segmentDefaultColor/colorSeed/saturation (resolved per-segment below) are its color controls.
     const alpha = typeof l.objectAlpha==='number' ? l.objectAlpha : 1;
     layerCtx.push({ name: l.name || 'segmentation', meshBase: `${base}/${info.mesh}`, segIds, props, layer:l, alpha });
   }
   if(!layerCtx.length) return null;
 
-  meshTotalAvail=0; const jobs=[];
-  layerCtx.forEach(lc=>{ meshTotalAvail+=lc.segIds.length; lc.segIds.forEach(seg=>jobs.push({lc, seg})); });
+  // a pasted link's picked segments are usually few, but nothing stops someone pasting one with
+  // thousands selected — cap total fetch/decode/draw-call work the same way the curated specimen
+  // path does, sampling evenly across each layer rather than just taking its first N; buildCustomDive
+  // compares meshTotalAvail against what actually loaded so a cap here is visible in the HUD, not silent.
+  const MAX_CUSTOM_MESHES=400;
+  meshTotalAvail=0; layerCtx.forEach(lc=>meshTotalAvail+=lc.segIds.length);
+  const perLayerCap = Math.max(20, Math.floor(MAX_CUSTOM_MESHES/layerCtx.length));
+  const jobs=[];
+  layerCtx.forEach(lc=>{
+    const want=Math.min(lc.segIds.length, perLayerCap), step=lc.segIds.length/want;
+    for(let i=0;i<want;i++) jobs.push({lc, seg: lc.segIds[Math.floor(i*step)]});
+  });
 
   let done=0;
   const loaded = await pool(jobs, 8, async(j)=>{
@@ -1466,7 +1483,11 @@ async function buildCustomDive(d){
 
   if(real && real.length){
     addRealOrganelles(real);
-    dataSource = `${real.length} mesh${real.length===1?'':'es'} · custom neuroglancer source`;
+    // meshTotalAvail (set inside loadCustomOrganelles) is how many segments the link actually
+    // selected — differs from real.length only when MAX_CUSTOM_MESHES capped it, and that's
+    // exactly when it's worth saying so instead of quietly loading a subset.
+    dataSource = (meshTotalAvail>real.length ? `${real.length} of ${meshTotalAvail.toLocaleString()} selected meshes`
+      : `${real.length} mesh${real.length===1?'':'es'}`)+" · custom neuroglancer source";
   }
 
   finalizeDive(dataSource);
