@@ -101,7 +101,8 @@
   #comp .dist{color:var(--dim);font-size:11px}
 
   #scanbar{position:absolute;left:50%;top:calc(50% + 26px);transform:translateX(-50%);
-    width:120px;height:3px;background:rgba(255,255,255,.12);opacity:0;transition:opacity .15s}
+    width:120px;height:3px;background:rgba(255,255,255,.12);opacity:0;transition:opacity .15s;
+    pointer-events:none}
   #scanbar > i{display:block;height:100%;width:0;background:var(--warn)}
 
   #help{left:50%;bottom:16px;transform:translateX(-50%);text-align:center;color:var(--dim);
@@ -199,6 +200,11 @@
     font-size:11px;letter-spacing:.04em;color:var(--warn);background:rgba(5,7,13,.6);
     border:1px solid var(--line);padding:4px 10px;backdrop-filter:blur(6px);white-space:nowrap}
   #tabHint b{color:var(--accent)}
+  #lockHint{position:absolute;left:50%;top:calc(50% - 70px);transform:translateX(-50%);z-index:9;
+    font-size:12px;letter-spacing:.03em;color:var(--ink);background:rgba(5,7,13,.7);
+    border:1px solid var(--line);padding:6px 12px;backdrop-filter:blur(6px);white-space:nowrap;
+    pointer-events:none}
+  #lockHint b{color:var(--accent)}
   .tool{font:inherit;font-size:11px;letter-spacing:.03em;color:var(--dim);cursor:pointer;
     border:1px solid var(--line);background:rgba(5,7,13,.6);padding:6px 11px;backdrop-filter:blur(6px)}
   .tool:hover{color:var(--ink)}
@@ -302,9 +308,10 @@
     </div>
   </div>
   <div id="tabHint">press <b>TAB</b> for menu</div>
+  <div id="lockHint">click to begin · press <b>ESC</b> anytime to release the cursor</div>
 
   <div id="help" class="panel">
-    <span id="helpBase"><b>W/S</b> thrust/brake · <b>A/D</b> lean carve · <b>mouse</b> look · <b>TAB</b> menu/cursor · <b>Shift</b> boost/analyze · <b>SPACE/R</b> jump while boarding &nbsp;|&nbsp; <b>X</b> board/detach · <b>K</b> avatar · <b>[</b>/<b>]</b> size · <b>V</b> view</span>
+    <span id="helpBase"><b>W/S</b> thrust/brake · <b>A/D</b> lean carve · <b>mouse</b> look (<b>ESC</b> to release) · <b>TAB</b> menu/cursor · <b>Shift</b> boost/analyze · <b>SPACE/R</b> jump while boarding &nbsp;|&nbsp; <b>X</b> board/detach · <b>K</b> avatar · <b>[</b>/<b>]</b> size · <b>V</b> view</span>
     <span id="helpJetpack" class="hidden">&nbsp;|&nbsp; <b>SPACE</b> jetpack thrust (limited fuel) · <b>click</b> laser · <b>X</b> latch onto a surface to run on it</span>
   </div>
 
@@ -1468,9 +1475,10 @@ function buildScene(d, rnd){
   // start at a 3/4 corner angle looking at the centre, so the volume reads as 3D (not a flat face)
   playerPos.set(58,34,70); camera.position.copy(playerPos);
   yaw=0.69; pitch=-0.38; yawRaw=yaw; pitchRaw=pitch; vel.set(0,0,0);
-  uiFree=false; appEl.style.cursor='none';
+  uiFree=false; appEl.style.cursor='none'; pointerLockDenyWarned=false;
   document.getElementById('menuOverlay').classList.add('hidden');
   document.getElementById('tabHint').innerHTML='press <b>TAB</b> for menu';
+  document.getElementById('lockHint').classList.remove('hidden');
 
   // hemisphere over flat ambient: even unlit surfaces get a cool-from-above/warm-from-below
   // gradient instead of one flat tint everywhere, for basically free — reads as much more
@@ -2109,15 +2117,32 @@ function setUiFree(v){
 // also work embedded in a cross-origin iframe, where pointer lock can be blocked entirely unless
 // the embedding page grants it — if the request fails/is unavailable, everything just keeps
 // working exactly as it already did (clientX/Y deltas, non-locked), no different code path needed.
+let pointerLockDenyWarned=false;
+function warnPointerLockFailed(detail){
+  console.warn('[celldive] pointer lock unavailable:', detail);
+  if(pointerLockDenyWarned) return;
+  pointerLockDenyWarned=true;
+  flash('cursor lock unavailable ('+detail+') — see console');
+}
 function requestLook(){
-  if(uiFree || document.pointerLockElement===appEl || !appEl.requestPointerLock) return;
-  try{ const p=appEl.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
+  if(uiFree) return;
+  if(document.pointerLockElement===appEl) return;   // already locked
+  if(!appEl.requestPointerLock){ warnPointerLockFailed('not supported'); return; }
+  try{
+    const p=appEl.requestPointerLock();
+    if(p && p.catch) p.catch(e=>warnPointerLockFailed((e&&(e.name||e.message))||'rejected'));
+  }catch(e){ warnPointerLockFailed((e&&(e.name||e.message))||'threw'); }
 }
 document.addEventListener('pointerlockchange', ()=>{
   pointerLocked = document.pointerLockElement===appEl;
   haveLastPos=false;
 });
-appEl.addEventListener('pointerdown', e=>{ if(e.button===0 && !uiFree){ fireHeld=true; requestLook(); } });
+// most browsers throttle re-locking right after an unlock (e.g. right after TAB/menu) — this at
+// least surfaces that as a visible reason instead of mouse-look silently staying edge-bounded
+document.addEventListener('pointerlockerror', ()=> warnPointerLockFailed('lock error event'));
+appEl.addEventListener('pointerdown', e=>{
+  if(e.button===0 && !uiFree){ fireHeld=true; requestLook(); document.getElementById('lockHint').classList.add('hidden'); }
+});
 appEl.addEventListener('pointerup',   ()=> fireHeld=false);
 appEl.addEventListener('pointerleave', ()=> fireHeld=false);
 // yaw/pitch (actually used to build the camera) chase this raw target with a little smoothing
@@ -3125,6 +3150,7 @@ function tick(){
       ui.scanbar.style.opacity=1; ui.scanfill.style.width=(scanProgress*100).toFixed(0)+'%';
       if(scanProgress>=1){
         scanProgress=0; scanMesh=null;
+        scanCooldown=1.2;   // otherwise this fires again immediately next frame while SHIFT/aim are still held
         ui.scanbar.style.opacity=0; ui.obj.classList.remove('scanning');
         const nm=ORG[candType]?ORG[candType].name:candType, wasNew=markTypeFound(candType);
         flash(nm+(wasNew?" analyzed":" ✓")); chime(680); showCard(candType);
