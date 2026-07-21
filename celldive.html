@@ -676,6 +676,7 @@ let jetFuel=1;   // 0..1 fraction; drains while thrusting, regenerates while not
 const JET_GRAVITY=14, JET_THRUST=38, JET_FUEL_SECONDS=25, JET_REGEN_SECONDS=12;   // lighter, more arcade-y gravity; fuel lasts much longer than it first did
 const JET_INFINITE_FUEL=false;
 let laserOn=false, laserBeam=null, fireHeld=false, punchTimer=0;   // jetpack laser + mesh hole-punching
+const laserBolts=[]; let boltTimer=0;   // travelling shot pulses, separate from the always-on aiming beam
 const playerPos = new THREE.Vector3();               // logical position (camera rides this in 1st person)
 const layerMeshes = {};                              // organelle type -> [meshes], for the ng-style layer panel
 let uniqueColors=true, shadowsOn=false;             // ng-style per-segment colours (on by default); dynamic shadows
@@ -1371,6 +1372,7 @@ function clearScene(){
   currentFit=null; lodLoading=0; lodTimer=0; questActive=false;
   skate.active=false; skate.root=null; skate.type=null; skate.side="outside"; skate.forward.set(0,0,-1); skate.gravity.copy(WORLD_DOWN); skate.lean=0; skate.grace=0;
   boardAir.active=false; boardAir.root=null; boardAir.side="outside"; boardAir.normal.set(0,1,0); boardAir.gravity.copy(WORLD_DOWN); boardAir.age=0; boardAir.cooldown=0;
+  laserBolts.forEach(b=>{ b.mesh.geometry.dispose(); b.mesh.material.dispose(); }); laserBolts.length=0; boltTimer=0;
 }
 
 function setLoad(msg){ const s=loadingEl.querySelector('span'); if(s) s.textContent=msg; }
@@ -1479,6 +1481,7 @@ function buildScene(d, rnd){
   document.getElementById('menuOverlay').classList.add('hidden');
   document.getElementById('tabHint').innerHTML='press <b>TAB</b> for menu';
   document.getElementById('lockHint').classList.remove('hidden');
+  awaitingFirstClick=true;
 
   // hemisphere over flat ambient: even unlit surfaces get a cool-from-above/warm-from-below
   // gradient instead of one flat tint everywhere, for basically free — reads as much more
@@ -2097,6 +2100,7 @@ addEventListener('wheel', e=>{
 }, {passive:false});
 addEventListener('keyup',   e=>{ keys[e.code]=false; });
 let lastX=0,lastY=0,yaw=0,pitch=0,yawRaw=0,pitchRaw=0,haveLastPos=false,uiFree=false,pointerLocked=false;
+let awaitingFirstClick=true;   // the very first click of a dive just dismisses "click to begin" / engages look — shouldn't also fire the laser
 // look follows the cursor by default (no button needed). TAB toggles a "menu" mode that
 // pauses look and frees the cursor for the toolbar/layer panel — reaching those otherwise means
 // crossing the game view first, which spins the camera around before you ever get there.
@@ -2141,7 +2145,11 @@ document.addEventListener('pointerlockchange', ()=>{
 // least surfaces that as a visible reason instead of mouse-look silently staying edge-bounded
 document.addEventListener('pointerlockerror', ()=> warnPointerLockFailed('lock error event'));
 appEl.addEventListener('pointerdown', e=>{
-  if(e.button===0 && !uiFree){ fireHeld=true; requestLook(); document.getElementById('lockHint').classList.add('hidden'); }
+  if(e.button===0 && !uiFree){
+    if(awaitingFirstClick) awaitingFirstClick=false;   // this click just engages controls — not a shot
+    else fireHeld=true;
+    requestLook(); document.getElementById('lockHint').classList.add('hidden');
+  }
 });
 appEl.addEventListener('pointerup',   ()=> fireHeld=false);
 appEl.addEventListener('pointerleave', ()=> fireHeld=false);
@@ -2807,6 +2815,34 @@ const LASER_MAX_RANGE=70, LASER_PUNCH_TRIS=1500000, LASER_MAX_DEPTH=40, LASER_HE
 const _laserRay=new THREE.Raycaster();
 let laserTargetMesh=null, laserHeat=0, laserTooBigWarned=false;
 const _laserLocalOrigin=new THREE.Vector3(), _laserLocalDir=new THREE.Vector3();
+
+// ---- laser bolts: small glowing pulses fired down the beam while triggering --------
+// The beam above is an always-on aiming line (needed for the drill raycast); on its own it just
+// sits there, which reads as a flashlight, not a gun. These are the actual "shots" — short bolts
+// that spawn at the muzzle and race out to the hit point (or fizzle at max range if firing at
+// nothing), independent of the drill logic so they still fly even before anything's in range.
+const BOLT_SPEED=240, BOLT_INTERVAL=0.065, BOLT_LEN=2.4;
+const _boltDir=new THREE.Vector3(), _boltOrigin=new THREE.Vector3();
+function spawnBolt(origin, dir, dist, color){
+  const mesh=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.16,BOLT_LEN,6),
+    new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.95, depthWrite:false}));
+  mesh.position.copy(origin);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+  scene.add(mesh);
+  laserBolts.push({mesh, origin:origin.clone(), dir:dir.clone(), traveled:0, dist:Math.max(1,dist)});
+}
+function updateBolts(dt){
+  for(let i=laserBolts.length-1;i>=0;i--){
+    const b=laserBolts[i];
+    b.traveled += BOLT_SPEED*dt;
+    if(b.traveled>=b.dist){
+      scene.remove(b.mesh); b.mesh.geometry.dispose(); b.mesh.material.dispose();
+      laserBolts.splice(i,1); continue;
+    }
+    b.mesh.position.copy(b.origin).addScaledVector(b.dir, b.traveled+BOLT_LEN/2);
+    b.mesh.material.opacity = 0.95*(1-b.traveled/b.dist);
+  }
+}
 function punchMesh(mesh, localOrigin, localDir, radius, depth){
   const geo=mesh.geometry, idxAttr=geo.index;
   if(!idxAttr) return false;
@@ -2873,6 +2909,14 @@ function updateLaser(dt){
   laserHeat = heat;
   // beam colour tracks heat: cool blue -> hot white-orange, the "almost through" tell
   laserBeam.material.color.setHex(!fireHeld ? 0x5588ff : heat>0.85 ? 0xffffff : heat>0.5 ? 0xffaa33 : 0xff3355);
+  boltTimer-=dt;
+  if(fireHeld && boltTimer<=0){
+    boltTimer=BOLT_INTERVAL;
+    camera.getWorldDirection(_boltDir);
+    _boltOrigin.copy(camera.position).addScaledVector(_boltDir, 0.6);
+    const boltColor = heat>0.85 ? 0xffffff : heat>0.5 ? 0xffaa33 : 0xff3355;
+    spawnBolt(_boltOrigin, _boltDir, Math.max(0.5,length-0.6), boltColor);
+  }
   if(!firingOnTarget) return;
   punchTimer-=dt; if(punchTimer>0) return; punchTimer=0.15;
   // floored, not just scaled down with avatarScale — at jetpack's extreme tininess the unfloored
@@ -3187,6 +3231,7 @@ function tick(){
   }
   manageLOD(dt);
   updateLaser(dt);
+  updateBolts(dt);
   proximityNarrate();
   // debounce the streaming chip so quick refinements don't make it flicker/pop
   lodActiveTime = lodLoading>0 ? lodActiveTime+dt : 0;
