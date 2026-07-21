@@ -196,8 +196,10 @@
     font-size:12px;letter-spacing:.14em;color:var(--accent);font-weight:700;margin-bottom:14px}
   #menuHead #menuClose{color:var(--dim);font-weight:400;letter-spacing:.04em;cursor:pointer;font-size:11px}
   #menuHead #menuClose:hover{color:var(--ink)}
+  #menuSub{color:var(--dim);font-size:11px;letter-spacing:.03em;margin:-6px 0 14px}
+  #menuSub b{color:var(--ink)}
   #tools{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-start;max-width:460px}
-  #tabHint{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:8;
+  #tabHint{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:8;
     font-size:11px;letter-spacing:.04em;color:var(--warn);background:rgba(5,7,13,.6);
     border:1px solid var(--line);padding:4px 10px;backdrop-filter:blur(6px);white-space:nowrap}
   #tabHint b{color:var(--accent)}
@@ -294,6 +296,7 @@
   <div id="menuOverlay" class="hidden">
     <div id="menuPanel">
       <div id="menuHead">MENU <span id="menuClose">✕ resume (TAB)</span></div>
+      <div id="menuSub">click outside or press <b>TAB</b> to close · <b>ESC</b> anytime releases the cursor</div>
       <div id="tools">
         <button class="tool" id="tCargo">🎯 cargo run</button>
         <button class="tool" id="tNarr">🔊 narration</button>
@@ -1493,9 +1496,9 @@ function buildScene(d, rnd){
   // static establishing view is the intended 3/4 angle instead of a fresh camera's default facing.
   camera.quaternion.setFromEuler(new THREE.Euler(pitch,yaw,0,'YXZ'));
   pointerLockDenyWarned=false;
-  setUiFree(true);   // open with the menu up front — see layers/detail/controls before diving in
-  document.getElementById('lockHint').classList.remove('hidden');
   awaitingFirstClick=true;
+  document.getElementById('lockHint').classList.remove('hidden');
+  setUiFree(true);   // open with the menu up front — closing it (however) doubles as "begin"
 
   // hemisphere over flat ambient: even unlit surfaces get a cool-from-above/warm-from-below
   // gradient instead of one flat tint everywhere, for basically free — reads as much more
@@ -2144,11 +2147,21 @@ function setUiFree(v){
   uiFree=v; haveLastPos=false; fireHeld=false;
   appEl.style.cursor = uiFree ? 'default' : 'none';
   document.getElementById('menuOverlay').classList.toggle('hidden', !uiFree);
+  const close=document.getElementById('menuClose');
+  if(close) close.textContent = awaitingFirstClick ? '▶ start diving' : '✕ resume (TAB)';
   const hint=document.getElementById('tabHint');
   if(hint) hint.innerHTML = uiFree ? 'press <b>TAB</b> to resume flying' : 'press <b>TAB</b> for menu';
   // release the OS cursor for clicking toolbar buttons — Pointer Lock keeps it invisible AND
   // pinned to the canvas, which would make the menu unusable
   if(uiFree && document.pointerLockElement===appEl) document.exitPointerLock();
+  // closing the menu for the very first time (before ever having clicked into the dive) doubles
+  // as "begin" — dismissing the menu (TAB / click outside / the button above) is already a click,
+  // so a separate "now click again to actually start" step was just redundant friction.
+  if(!uiFree && awaitingFirstClick){
+    awaitingFirstClick=false;
+    document.getElementById('lockHint').classList.add('hidden');
+    requestLook();
+  }
 }
 // Pointer Lock: the real, standard way browser games do mouse-look — locks + hides the OS
 // cursor and gives unbounded relative movement (no more hitting the edge of the screen, and no
