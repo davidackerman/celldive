@@ -46,6 +46,12 @@
     user-select:none;letter-spacing:.04em;white-space:nowrap}
   .chip.on{color:var(--bg);background:var(--accent);border-color:var(--accent)}
   #status{color:var(--dim);font-size:11px;margin:2px 2px 16px}
+  #custom{border:1px solid var(--line);background:rgba(10,14,22,.5);padding:12px;margin:0 0 16px}
+  #custom textarea{width:100%;min-height:74px;background:rgba(255,255,255,.04);border:1px solid var(--line);
+    color:var(--ink);padding:9px 12px;font:inherit;font-size:12px;outline:none;resize:vertical}
+  #custom textarea:focus{border-color:var(--accent)}
+  #custom .row{display:flex;gap:10px;align-items:center;margin-top:10px}
+  #customErr{color:#ff8a8a;font-size:11px}
   #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(208px,1fr));gap:14px}
   .card{border:1px solid var(--line);background:rgba(10,14,22,.5);cursor:pointer;overflow:hidden;
     transition:transform .12s ease, border-color .12s ease;position:relative;display:flex;flex-direction:column}
@@ -120,6 +126,8 @@
     color:#eaf2ff;background:rgba(6,10,18,.72);border:1px solid rgba(140,180,255,.28);
     border-radius:5px;padding:2px 8px;text-shadow:0 0 3px rgba(0,0,0,.9)}
   #hoverlabel .id{color:#8fb6ff;margin-left:5px}
+  #hoverlabel .propline{display:block;white-space:normal;max-width:280px;margin-top:2px}
+  #hoverlabel .propline.dim{color:var(--dim)}
 
   #flash{position:absolute;left:50%;top:34%;transform:translateX(-50%);
     font-size:16px;letter-spacing:.16em;text-transform:uppercase;color:var(--good);
@@ -176,7 +184,21 @@
     border:1px solid var(--line);background:rgba(5,7,13,.55);padding:5px 9px;letter-spacing:.06em}
   #stream:before{content:"⟳ ";display:inline-block;animation:spin 1.1s linear infinite}
 
-  #tools{position:absolute;left:50%;bottom:46px;transform:translateX(-50%);z-index:8;display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
+  /* the menu is its own popup — a dimmed backdrop + a distinct gray panel floating in the
+     middle of the screen, not just the toolbar becoming clickable in its usual spot */
+  #menuOverlay{position:fixed;inset:0;z-index:40;background:rgba(4,6,12,.62);
+    backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center}
+  #menuPanel{background:#20242e;border:1px solid var(--line);border-radius:10px;
+    padding:20px 22px 22px;box-shadow:0 24px 70px rgba(0,0,0,.55);max-width:520px}
+  #menuHead{display:flex;justify-content:space-between;align-items:center;gap:20px;
+    font-size:12px;letter-spacing:.14em;color:var(--accent);font-weight:700;margin-bottom:14px}
+  #menuHead #menuClose{color:var(--dim);font-weight:400;letter-spacing:.04em;cursor:pointer;font-size:11px}
+  #menuHead #menuClose:hover{color:var(--ink)}
+  #tools{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-start;max-width:460px}
+  #tabHint{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:8;
+    font-size:11px;letter-spacing:.04em;color:var(--warn);background:rgba(5,7,13,.6);
+    border:1px solid var(--line);padding:4px 10px;backdrop-filter:blur(6px);white-space:nowrap}
+  #tabHint b{color:var(--accent)}
   .tool{font:inherit;font-size:11px;letter-spacing:.03em;color:var(--dim);cursor:pointer;
     border:1px solid var(--line);background:rgba(5,7,13,.6);padding:6px 11px;backdrop-filter:blur(6px)}
   .tool:hover{color:var(--ink)}
@@ -200,9 +222,20 @@
     <div id="bar">
       <input id="search" placeholder="search specimens…  (hela, liver, neuron, fly, kidney…)" autocomplete="off"/>
       <div class="chip on" id="realToggle">● real 3D only</div>
+      <div class="chip on" id="modeFlight">🚌 flight</div>
+      <div class="chip" id="modeJetpack">🚀 jetpack</div>
+      <div class="chip" id="customLinkBtn">🔗 paste a neuroglancer link</div>
     </div>
     <div id="filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
     <div id="status">connecting to OpenOrganelle archive…</div>
+    <div id="custom" class="hidden">
+      <textarea id="customInput" placeholder="paste a neuroglancer share link (or raw JSON state)…"></textarea>
+      <div class="row">
+        <button class="btn p" id="customDive">dive ↘</button>
+        <button class="btn" id="customCancel">cancel</button>
+        <span id="customErr"></span>
+      </div>
+    </div>
     <div id="grid"></div>
   </div>
 </div>
@@ -217,12 +250,13 @@
   <div id="flash"></div>
 
   <div id="hud-top" class="panel">
-    <h1><span id="specId">specimen</span><span class="exit" id="exitBtn">✕ exit</span></h1>
+    <h1><span id="specId">specimen</span><span style="display:flex;gap:10px"><span class="exit" id="copyLinkBtn" title="copy a link to this dive">🔗 copy link</span><span class="exit" id="exitBtn">✕ exit</span></span></h1>
     <div class="sub" id="specWho">—</div>
     <div class="sub" id="specSrc" style="color:#7fe7ff;margin-top:3px">—</div>
     <div class="stats">
       <div class="row"><span class="k">depth</span><span class="v" id="depth">—</span></div>
       <div class="row"><span class="k">speed</span><span class="v" id="speed">—</span></div>
+      <div class="row hidden" id="fuelRow"><span class="k">fuel</span><span class="v" id="fuel">100%</span></div>
       <div class="row"><span class="k">analyzed</span><span class="v" id="found">0 / 0</span></div>
     </div>
   </div>
@@ -237,7 +271,7 @@
     <div class="label">objective · analyze</div>
     <div class="name" id="objName">—</div>
     <div id="comp"><div class="ball" id="compBall"><i id="compDot"></i></div><span class="dist" id="compDist">—</span></div>
-    <div class="hint" id="objHint">fly toward the marker, then hold <b style="color:#dfe9f5">SPACE</b> to analyze</div>
+    <div class="hint" id="objHint">fly toward the marker, then hold <b style="color:#dfe9f5">SHIFT</b> to analyze</div>
   </div>
 
   <div id="card" class="panel">
@@ -248,22 +282,30 @@
 
   <div id="stream" class="hidden">streaming higher detail…</div>
 
-  <div id="tools">
-    <button class="tool" id="tCargo">🎯 cargo run</button>
-    <button class="tool" id="tNarr">🔊 narration</button>
-    <button class="tool" id="tTour">🧭 take the tour</button>
-    <button class="tool" id="tAmb">🎵 ambience</button>
-    <button class="tool on" id="tColor">🎨 unique colors</button>
-    <button class="tool" id="tShadow">☀️ shadows</button>
-    <button class="tool" id="tView">🚌 bus view</button>
-    <button class="tool" id="tSkate">🛹 skateboard</button>
-    <button class="tool" id="tAvatar">🚌 bus</button>
-    <button class="tool" id="tShrink">- size</button>
-    <button class="tool" id="tGrow">+ size</button>
+  <div id="menuOverlay" class="hidden">
+    <div id="menuPanel">
+      <div id="menuHead">MENU <span id="menuClose">✕ resume (TAB)</span></div>
+      <div id="tools">
+        <button class="tool" id="tCargo">🎯 cargo run</button>
+        <button class="tool" id="tNarr">🔊 narration</button>
+        <button class="tool" id="tTour">🧭 take the tour</button>
+        <button class="tool" id="tAmb">🎵 ambience</button>
+        <button class="tool on" id="tColor">🎨 unique colors</button>
+        <button class="tool" id="tShadow">☀️ shadows</button>
+        <button class="tool" id="tView">🚌 bus view</button>
+        <button class="tool" id="tSkate">🛹 skateboard</button>
+        <button class="tool" id="tAvatar">🚌 bus</button>
+        <button class="tool" id="tShrink">- size</button>
+        <button class="tool" id="tGrow">+ size</button>
+        <button class="tool hidden" id="tLaser">🔺 laser</button>
+      </div>
+    </div>
   </div>
+  <div id="tabHint">press <b>TAB</b> for menu</div>
 
   <div id="help" class="panel">
-    <b>W/S</b> thrust/brake · <b>A/D</b> lean carve · <b>drag</b> look · <b>Shift</b> boost · <b>SPACE/R</b> jump while boarding · <b>SPACE</b> analyze &nbsp;|&nbsp; <b>X</b> board/detach · <b>K</b> avatar · <b>[</b>/<b>]</b> size · <b>V</b> view
+    <span id="helpBase"><b>W/S</b> thrust/brake · <b>A/D</b> lean carve · <b>mouse</b> look · <b>TAB</b> menu/cursor · <b>Shift</b> boost/analyze · <b>SPACE/R</b> jump while boarding &nbsp;|&nbsp; <b>X</b> board/detach · <b>K</b> avatar · <b>[</b>/<b>]</b> size · <b>V</b> view</span>
+    <span id="helpJetpack" class="hidden">&nbsp;|&nbsp; <b>SPACE</b> jetpack thrust (limited fuel) · <b>click</b> laser · <b>X</b> latch onto a surface to run on it</span>
   </div>
 
   <div id="win">
@@ -282,7 +324,7 @@
 <div id="loading" class="hidden"><div class="ring"></div><span>descending into specimen…</span></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://www.gstatic.com/draco/v1/decoders/draco_decoder.js"></script>
+<script src="https://www.gstatic.com/draco/v1/decoders/draco_wasm_wrapper.js"></script>
 <script>
 (function(){
 "use strict";
@@ -518,6 +560,98 @@ document.getElementById('realToggle').addEventListener('click', function(){
 loadCatalog();
 
 // ===================================================================
+//  EXPLORATION MODE PICKER (flight / jetpack) — chosen alongside the specimen
+// ===================================================================
+const modeFlightEl = document.getElementById('modeFlight'), modeJetpackEl = document.getElementById('modeJetpack');
+function setExplorationMode(m){
+  explorationMode = (m==='jetpack') ? 'jetpack' : 'flight';
+  modeFlightEl.classList.toggle('on', explorationMode==='flight');
+  modeJetpackEl.classList.toggle('on', explorationMode==='jetpack');
+  // a school bus doesn't read as "jetpacker" — default the third-person avatar to the small
+  // kinesin walker for jetpack, bus for flight. An explicit avatar=… in a shared link (parsed
+  // right after this) still overrides it.
+  avatarMode = explorationMode==='jetpack' ? 'kinesin' : 'bus';
+  // being roughly mesh-sized makes running on a surface feel unstable — default much smaller for
+  // jetpack (ant-on-an-organelle scale), which also slows movement for finer control. [ ]/tGrow
+  // still resize freely from there.
+  avatarScale = explorationMode==='jetpack' ? 0.12 : 1;
+  syncModeHash();
+}
+modeFlightEl.addEventListener('click', ()=>setExplorationMode('flight'));
+modeJetpackEl.addEventListener('click', ()=>setExplorationMode('jetpack'));
+
+// ===================================================================
+//  CUSTOM NEUROGLANCER LINK (paste any share link / raw state JSON)
+// ===================================================================
+const customEl=document.getElementById('custom'), customInputEl=document.getElementById('customInput'),
+      customErrEl=document.getElementById('customErr');
+document.getElementById('customLinkBtn').addEventListener('click', ()=>{
+  customEl.classList.remove('hidden'); customErrEl.textContent=''; customInputEl.focus();
+});
+document.getElementById('customCancel').addEventListener('click', ()=> customEl.classList.add('hidden'));
+document.getElementById('customDive').addEventListener('click', ()=>{
+  const state = extractNgState(customInputEl.value);
+  if(!state || !Array.isArray(state.layers)){ customErrEl.textContent="couldn't parse that as a neuroglancer link or state"; return; }
+  customEl.classList.add('hidden');
+  startCustomDive(state);
+});
+// pull a neuroglancer JSON state out of a pasted share link (percent-encoded fragment,
+// optionally prefixed "#!"), a bare fragment, or raw JSON pasted directly.
+function extractNgState(text){
+  text=(text||"").trim(); if(!text) return null;
+  try{ return JSON.parse(text); }catch(e){ /* not raw JSON — try as a URL/fragment */ }
+  const hashIdx=text.indexOf('#');
+  let frag = hashIdx>=0 ? text.slice(hashIdx+1) : text;
+  if(frag[0]==='!') frag=frag.slice(1);
+  try{ return JSON.parse(decodeURIComponent(frag)); }catch(e){}
+  try{ return JSON.parse(frag); }catch(e){}
+  return null;
+}
+
+// ===================================================================
+//  SHAREABLE LINKS — the URL hash names which dive (if any) is active, plus
+//  which mode/avatar were picked. NOT a full session snapshot (no camera pose,
+//  analyzed progress, etc) — just enough to reopen the same dive the same way.
+//    #s=<specimenId>&mode=<flight|jetpack>&avatar=<bus|kinesin>
+//    #ng=<JSON of a pasted neuroglancer state>&mode=...&avatar=...
+// ===================================================================
+function hashParams(extra){
+  const usp=new URLSearchParams();
+  Object.keys(extra).forEach(k=>{ if(extra[k]!=null) usp.set(k, extra[k]); });
+  usp.set('mode', explorationMode); usp.set('avatar', avatarMode);
+  return usp.toString();
+}
+function applyDiveHash(extra, opts){
+  const hash = '#'+hashParams(extra);
+  if(opts && opts.skipHistory) history.replaceState(null,'',hash);
+  else history.pushState(null,'',hash);
+}
+// call whenever mode/avatar changes mid-dive, so a copied link reflects the current choice
+function syncModeHash(){
+  if(!spec || location.hash.length<2) return;
+  const usp=new URLSearchParams(location.hash.slice(1));
+  usp.set('mode', explorationMode); usp.set('avatar', avatarMode);
+  history.replaceState(null,'','#'+usp.toString());
+}
+function parseHash(){
+  if(location.hash.length<2) return null;
+  const usp=new URLSearchParams(location.hash.slice(1));
+  const m=usp.get('mode'), a=usp.get('avatar');
+  if(m==='jetpack'||m==='flight') setExplorationMode(m);
+  if(a==='bus'||a==='kinesin') avatarMode=a;
+  const ng=usp.get('ng');
+  if(ng){ try{ const st=JSON.parse(ng); if(st&&Array.isArray(st.layers)) return {kind:'custom', state:st}; }catch(e){} return null; }
+  const s=usp.get('s');
+  return s ? {kind:'specimen', id:s} : null;
+}
+window.addEventListener('popstate', ()=>{
+  const h=parseHash();
+  if(h && h.kind==='specimen') startDive(describe(h.id), {skipHistory:true});
+  else if(h && h.kind==='custom') startCustomDive(h.state, {skipHistory:true});
+  else exitToSelect({skipHistory:true});
+});
+
+// ===================================================================
 //  THE DIVE  (Three.js flythrough, built per specimen)
 // ===================================================================
 const THREE = window.THREE;
@@ -530,6 +664,11 @@ let spot=null, spotTarget=null, spotIntensity=2.6;   // controllable forward tor
 let shadowLight=null;                                // scene key light that casts object-on-object shadows
 let bus=null, thirdPerson=false, busRoll=0;          // the visible avatar + external view
 let avatarMode="bus", avatarScale=1;
+let explorationMode="flight";  // "flight" (free 6dof, today's default) or "jetpack" (gravity + fuel-limited thrust)
+let jetFuel=1;   // 0..1 fraction; drains while thrusting, regenerates while not
+const JET_GRAVITY=14, JET_THRUST=38, JET_FUEL_SECONDS=25, JET_REGEN_SECONDS=12;   // lighter, more arcade-y gravity; fuel lasts much longer than it first did
+const JET_INFINITE_FUEL=false;
+let laserOn=false, laserBeam=null, fireHeld=false, punchTimer=0;   // jetpack laser + mesh hole-punching
 const playerPos = new THREE.Vector3();               // logical position (camera rides this in 1st person)
 const layerMeshes = {};                              // organelle type -> [meshes], for the ng-style layer panel
 let uniqueColors=true, shadowsOn=false;             // ng-style per-segment colours (on by default); dynamic shadows
@@ -541,10 +680,10 @@ let marker=null, markerPulse=0;                       // 3D direction marker at 
 let targets=[], decor=[], dust;
 let spec=null;
 const raycaster = new THREE.Raycaster();
-const skate = {active:false, root:null, type:null, side:"outside", normal:new THREE.Vector3(0,1,0), forward:new THREE.Vector3(0,0,-1), lastPoint:new THREE.Vector3(), gravity:new THREE.Vector3(0,-1,0), lean:0, grace:0};
-const boardAir = {active:false, root:null, side:"outside", normal:new THREE.Vector3(0,1,0), gravity:new THREE.Vector3(0,-1,0), age:0, cooldown:0};
+const skate = {active:false, root:null, type:null, side:"outside", mode:"board", normal:new THREE.Vector3(0,1,0), forward:new THREE.Vector3(0,0,-1), lastPoint:new THREE.Vector3(), gravity:new THREE.Vector3(0,-1,0), lean:0, grace:0};
+const boardAir = {active:false, root:null, side:"outside", mode:"board", normal:new THREE.Vector3(0,1,0), gravity:new THREE.Vector3(0,-1,0), age:0, cooldown:0};
 const SKATE_MIN_R=7, SKATE_LATCH_DIST=42, SKATE_HOVER=3.1, SKATE_PROBE=18;
-const AVATAR_MIN_SCALE=0.06, AVATAR_MAX_SCALE=2.6, AVATAR_SCALE_RATIO=1.18;
+const AVATAR_MIN_SCALE=0.005, AVATAR_MAX_SCALE=2.6, AVATAR_SCALE_RATIO=1.18;
 
 function fbm(x,y,z){
   return 0.55*Math.sin(x*1.3 + y*0.7)
@@ -579,8 +718,21 @@ function omat(color, emissive, opacity){
     transparent: opacity!==undefined, opacity: opacity===undefined?1:opacity,
     side: THREE.DoubleSide, flatShading:false });
 }
+// bioluminescent "breathing" glow — a per-mesh-phased sine on emissiveIntensity so organelles
+// read as a little alive rather than uniformly, flatly lit. Phase is randomized once per mesh
+// and cached on it, so different organelles drift in and out of sync with each other. (First cut
+// of this swung +/-0.16 on a base of 0.6 — far too small a fraction of the emissive contribution
+// to ever be visible next to the scene's other lighting; this swings much wider.)
+function pulseGlow(root, t){
+  root.traverse(x=>{ if(x.isMesh && x.material && x.material.emissive){
+    if(x.userData._pulsePhase===undefined) x.userData._pulsePhase=Math.random()*Math.PI*2;
+    x.material.emissiveIntensity = 0.55 + 0.5*Math.sin(t*1.7 + x.userData._pulsePhase);
+  }});
+}
 
 const CELL_R = 100;
+const JET_FLOOR_Y = -(CELL_R-4);   // jetpack's hard floor height, shared by the collision check and its visible plane
+let floorMesh=null;
 
 // ===================================================================
 //  REAL MESH LOADER — neuroglancer_multilod_draco, decoded in-browser
@@ -607,11 +759,19 @@ const MESH_LAYERS = [
 const TYPE_PRIORITY = {nucleus:0,mito:1,er:2,golgi:3,lysosome:4,endosome:5,peroxisome:6,lipid:7,microtubule:8,vesicle:9,ribosome:10,structure:11};
 
 let _draco=null;
+// real WASM build of the same official Draco decoder, not the asm.js one (draco_decoder.js) —
+// smaller transfer (~344KB total vs ~720KB) and meaningfully faster mesh decoding, which is the
+// one genuinely CPU-heavy step in the whole loading pipeline (fetching/parsing/hashing are cheap
+// by comparison and wouldn't benefit from WASM). locateFile is explicit here rather than relying
+// on the wrapper's own document.currentScript-based default, just to be robust either way.
 function ensureDraco(){
   if(_draco) return _draco;
   _draco = new Promise((res,rej)=>{
     if(typeof DracoDecoderModule==="undefined"){ rej(new Error("draco script not loaded")); return; }
-    try{ DracoDecoderModule({ onModuleLoaded:m=>res(m) }); }catch(e){ rej(e); }
+    try{ DracoDecoderModule({
+      onModuleLoaded:m=>res(m),
+      locateFile:(path)=>'https://www.gstatic.com/draco/v1/decoders/'+path,
+    }); }catch(e){ rej(e); }
   });
   return _draco;
 }
@@ -695,17 +855,104 @@ function dracoDecode(draco, arrayBuf){
 }
 function decoderType(draco,dec,db){ return dec.GetEncodedGeometryType(db); }
 
-// per-segment metadata (info + manifest), cached so LOD swaps never refetch them
+// ===================================================================
+//  SHARDED PRECOMPUTED FORMAT (neuroglancer_uint64_sharded_v1)
+//  Needed for arbitrary/custom neuroglancer links — large public datasets (e.g.
+//  FlyEM hemibrain) publish meshes sharded, unlike CellMap's unsharded layout.
+//  Ported against the actual neuroglancer source (src/util/hash.ts,
+//  src/datasource/precomputed/sharded.ts) rather than reconstructed from memory —
+//  the byte layout here is load-bearing and easy to get subtly wrong.
+// ===================================================================
+function rotl32(x,r){ return (x<<r)|(x>>>(32-r)); }
+function murmurMix32(h){ h^=h>>>16; h=Math.imul(h,0x85ebca6b); h^=h>>>13; h=Math.imul(h,0xc2b2ae35); h^=h>>>16; return h; }
+// murmurhash3_x86_128, reduced to its low 64 bits, for a fixed 8-byte (uint64) input — exactly
+// how neuroglancer hashes a chunk id for sharded lookups. seed is always 0 for this use.
+function murmur3_x86_128_low64(input){
+  let h1=0,h2=0,h3=0,h4=0;
+  const c1=0x239b961b, c2=0xab0e9789, c3=0x38b34ae5;
+  let k2=Math.imul(Number(input>>BigInt(32)), c2); k2=rotl32(k2,16); k2=Math.imul(k2,c3); h2^=k2;
+  let k1=Math.imul(Number(input&BigInt(0xffffffff)), c1); k1=rotl32(k1,15); k1=Math.imul(k1,c2); h1^=k1;
+  const len=8;
+  h1^=len; h2^=len; h3^=len; h4^=len;
+  h1=(h1+h2)>>>0; h1=(h1+h3)>>>0; h1=(h1+h4)>>>0; h2=(h2+h1)>>>0; h3=(h3+h1)>>>0; h4=(h4+h1)>>>0;
+  h1=murmurMix32(h1); h2=murmurMix32(h2); h3=murmurMix32(h3); h4=murmurMix32(h4);
+  h1=(h1+h2)>>>0; h1=(h1+h3)>>>0; h1=(h1+h4)>>>0; h2=(h2+h1)>>>0;
+  return BigInt(h1) | (BigInt(h2)<<BigInt(32));
+}
+async function gunzipIfNeeded(buf, encoding){
+  if(encoding!=='gzip') return buf;
+  const ds=new DecompressionStream('gzip');
+  const stream=new Blob([buf]).stream().pipeThrough(ds);
+  return await new Response(stream).arrayBuffer();
+}
+const _shardIndexCache={};   // shardUrl -> Promise<ArrayBuffer> (the fixed-size shard index at the front of the file)
+// locate one object's manifest within its shard file: hash -> shard/minishard -> minishard
+// index (decoded) -> this id's (offset,size) -> that IS the manifest's own byte range (fragment
+// data for the object sits immediately before it in the same shard file, once we know its total size).
+async function locateSharded(shardBaseUrl, sharding, idStr){
+  const id=BigInt(idStr);
+  const preshifted=id>>BigInt(sharding.preshift_bits);
+  const hashed = sharding.hash==='identity' ? preshifted : murmur3_x86_128_low64(preshifted);
+  const minishardBits=BigInt(sharding.minishard_bits), shardBits=BigInt(sharding.shard_bits);
+  const minishard = hashed & ((1n<<minishardBits)-1n);
+  const shard = (hashed>>minishardBits) & ((1n<<shardBits)-1n);
+  const shardHex = shard.toString(16).padStart(Math.max(1,Math.ceil(Number(shardBits)/4)),'0');
+  const shardUrl = `${shardBaseUrl}/${shardHex}.shard`;
+  const shardIndexEnd = (1n<<minishardBits)*16n;
+
+  if(!_shardIndexCache[shardUrl]) _shardIndexCache[shardUrl] =
+    fetch(shardUrl,{headers:{Range:`bytes=0-${(shardIndexEnd-1n)}`}}).then(r=>r.arrayBuffer());
+  const idxBuf = await _shardIndexCache[shardUrl];
+  const idxDv = new DataView(idxBuf);
+  const row = Number(minishard)*16;
+  const msStart = idxDv.getBigUint64(row,true), msEnd = idxDv.getBigUint64(row+8,true);
+  if(msEnd<=msStart) return null;   // empty minishard — no object of ours lives here
+
+  const msBufRaw = await (await fetch(shardUrl,{headers:{Range:
+    `bytes=${shardIndexEnd+msStart}-${shardIndexEnd+msEnd-1n}`}})).arrayBuffer();
+  const msBuf = await gunzipIfNeeded(msBufRaw, sharding.minishard_index_encoding);
+  const n = msBuf.byteLength/24;
+  const msDv = new DataView(msBuf);
+  let prevId=0n, prevStart=0n, found=null;
+  for(let i=0;i<n;i++){
+    const entryId = prevId + msDv.getBigUint64(i*8,true); prevId=entryId;
+    const start = prevStart + msDv.getBigUint64((n+i)*8,true);
+    const size = msDv.getBigUint64((2*n+i)*8,true);
+    const end = start+size; prevStart=end;
+    if(entryId===id){ found={start,end}; break; }
+  }
+  if(!found) return null;
+  return { shardUrl, manifestOffset:shardIndexEnd+found.start, manifestSize:found.end-found.start };
+}
+async function meshMetaSharded(base, seg, info){
+  const loc = await locateSharded(base, info.sharding, seg);
+  if(!loc) return null;
+  const manBufRaw = await (await fetch(loc.shardUrl,{headers:{Range:
+    `bytes=${loc.manifestOffset}-${loc.manifestOffset+loc.manifestSize-1n}`}})).arrayBuffer();
+  const manBuf = await gunzipIfNeeded(manBufRaw, info.sharding.data_encoding);
+  const man = parseManifest(manBuf);
+  // fragment sizes are on-disk sizes — exactly what's needed to compute fragBase (fragments
+  // are never gzipped even when data_encoding is 'gzip' — that only governs this manifest chunk;
+  // verified against real sharded data, fragment bytes always start with the DRACO magic).
+  let totalFragBytes=0; man.lods.forEach(l=>l.frags.forEach(f=>{ totalFragBytes+=f.size; }));
+  return { base, seg, info, man, fetchKind:'sharded', shardUrl:loc.shardUrl,
+    fragBase: Number(loc.manifestOffset) - totalFragBytes };
+}
+
+// per-segment metadata (info + manifest), cached so LOD swaps never refetch them.
+// base-URL-agnostic: works for CellMap's fixed bucket layout AND an arbitrary custom
+// precomputed source (Feature 2) — only the base URL differs, the format handling doesn't.
 const _infoCache={}, _manCache={};
-async function meshMeta(id, layer, seg){
-  const base=`${BUCKET}/${id}/neuroglancer/mesh/${layer}`;
+async function meshMetaAt(base, seg){
   if(!_infoCache[base]) _infoCache[base]=await (await fetch(`${base}/info`,{cache:"force-cache"})).json();
   const info=_infoCache[base];
-  if(info && info['@type']==='neuroglancer_legacy_mesh') return {base, seg, info, legacy:true};
+  if(info && info['@type']==='neuroglancer_legacy_mesh') return {base, seg, info, legacy:true, fetchKind:'unsharded'};
+  if(info && info.sharding) return meshMetaSharded(base, seg, info);
   const mkey=base+"/"+seg;
   if(!_manCache[mkey]) _manCache[mkey]=parseManifest(await (await fetch(`${base}/${seg}.index`,{cache:"force-cache"})).arrayBuffer());
-  return {base, seg, info, man:_manCache[mkey]};
+  return {base, seg, info, man:_manCache[mkey], fetchKind:'unsharded'};
 }
+async function meshMeta(id, layer, seg){ return meshMetaAt(`${BUCKET}/${id}/neuroglancer/mesh/${layer}`, seg); }
 function coarsestLOD(man){ let L=man.num_lods-1; while(L>0 && man.lods[L].frags.every(f=>f.size===0)) L--; return L; }
 function lodBytes(man, L){ return man.lods[L].frags.reduce((s,f)=>s+f.size,0); }
 // a "medium" LOD: about halfway down the pyramid (leaning finer), never finer than the detail
@@ -739,16 +986,26 @@ async function loadLegacy(meta){
   }
   return posNm.length ? {posNm:new Float32Array(posNm), idx} : null;
 }
+// fetch the raw bytes for a span of the fragment-data blob — unsharded: the `<seg>` file at
+// [start,end]; sharded: the same shard file, anchored at meta.fragBase (Feature 2).
+async function fetchFragRange(meta, start, end){
+  if(meta.fetchKind==='sharded')
+    return (await fetch(meta.shardUrl,{headers:{Range:`bytes=${meta.fragBase+start}-${meta.fragBase+end}`}})).arrayBuffer();
+  return (await fetch(`${meta.base}/${meta.seg}`,{headers:{Range:`bytes=${start}-${end}`}})).arrayBuffer();
+}
 async function loadLOD(draco, meta, L){
   if(meta.legacy) return loadLegacy(meta);
-  const {base, seg, info, man}=meta, bits=info.vertex_quantization_bits, T=info.transform;
+  const {info, man}=meta, bits=info.vertex_quantization_bits, T=info.transform;
   const frags=man.lods[L].frags.filter(f=>f.size>0);
   if(!frags.length) return null;
   const start=frags[0].byteStart, end=frags[frags.length-1].byteStart+frags[frags.length-1].size-1;
-  const data=await (await fetch(`${base}/${seg}`,{headers:{Range:`bytes=${start}-${end}`}})).arrayBuffer();
+  const data=await fetchFragRange(meta, start, end);
   const q=Math.pow(2,bits)-1, posNm=[], idx=[]; let vbase=0;
   for(const fr of frags){
     const local=fr.byteStart-start;
+    // fragments are always raw Draco — 'data_encoding' (when gzip) governs only the manifest
+    // chunk fetched via the minishard index, not the fragment payload (verified against real
+    // sharded hemibrain data: fragment bytes start with the DRACO magic, never gzip-wrapped).
     const dec=dracoDecode(draco, data.slice(local,local+fr.size));
     if(!dec||!dec.nP) continue;
     for(let i=0;i<dec.nP;i++){
@@ -854,7 +1111,11 @@ async function loadRealOrganelles(id, onProgress){
     if(p[i+2]<mn[2])mn[2]=p[i+2]; if(p[i+2]>mx[2])mx[2]=p[i+2]; }}
   const ctr=[(mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2];
   const ext=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1;
-  currentFit = {ctr, fit:(CELL_R*1.7)/ext};
+  const fit=(CELL_R*1.7)/ext;
+  // per-axis extents in game units, for autoAvatarScale() — "1% of the dataset's smallest
+  // dimension" needs the actual loaded bounding box, not just the single max-axis fit scalar.
+  const dims=[(mx[0]-mn[0])*fit,(mx[1]-mn[1])*fit,(mx[2]-mn[2])*fit];
+  currentFit = {ctr, fit, dims};
 
   const entries=[];
   for(const o of good){
@@ -867,6 +1128,151 @@ async function loadRealOrganelles(id, onProgress){
     mesh.userData.meta = o.meta;        // {base,seg,info,man,_L0}
     mesh.userData.lod = o.meta._Linit;  // current level of detail (starts at medium)
     mesh.userData.loading = false;
+    entries.push({type:o.type, mesh});
+  }
+  return entries;
+}
+
+// ===================================================================
+//  ARBITRARY NEUROGLANCER LINKS — any precomputed segmentation source, loading
+//  exactly the segments already selected in the pasted state (Feature 2).
+// ===================================================================
+// precomputed:// / gs:// / s3:// / http(s):// -> a plain https base URL, no trailing slash.
+function resolveSourceUrl(src){
+  let url = typeof src==='string' ? src : (src && src.url) || '';
+  url = url.replace(/^precomputed:\/\//,'');
+  if(url.startsWith('gs://')) url = 'https://storage.googleapis.com/'+url.slice(5);
+  else if(url.startsWith('s3://')){
+    const rest=url.slice(5), i=rest.indexOf('/');
+    const bucket = i<0 ? rest : rest.slice(0,i), path = i<0 ? '' : rest.slice(i+1);
+    url = `https://${bucket}.s3.amazonaws.com/${path}`;
+  }
+  return url.replace(/\/+$/,'');
+}
+async function fetchJson(url){
+  const r = await fetch(url,{cache:"force-cache"});
+  if(!r.ok) throw new Error('fetch failed ('+r.status+'): '+url);
+  return r.json();
+}
+// respect a pasted neuroglancer link's own per-layer look (Feature 2's "specify the view you'd
+// want"): fixed per-segment colors, a fixed layer default color, or its own colour-seed hash —
+// ported bit-for-bit from neuroglancer's own SegmentColorHash.compute() (src/segment_color.ts),
+// reusing murmur() (already identical to its hashCombine — verified against the actual source),
+// so a seed the user picked in neuroglancer reproduces the same colors here.
+function hsvToRgbArr(h,s,v){
+  const i=Math.floor(h*6)%6, f=h*6-Math.floor(h*6);
+  const p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
+  switch(i){
+    case 0: return [v,t,p]; case 1: return [q,v,p]; case 2: return [p,v,t];
+    case 3: return [p,q,v]; case 4: return [t,p,v]; default: return [v,p,q];
+  }
+}
+function ngSegmentColor(seed, idBig){
+  const low=Number(idBig & 0xffffffffn), high=Number((idBig>>32n) & 0xffffffffn);
+  let h=murmur(seed>>>0, low);
+  h=murmur(h, high);
+  const c0=(h&0xff)/255, c1=((h>>>8)&0xff)/255;
+  const [r,g,b]=hsvToRgbArr(c0, 0.5+0.5*c1, 1.0);
+  return new THREE.Color(r,g,b);
+}
+function resolveSegmentColor(layer, idStr){
+  const fixed = layer && layer.segmentColors && layer.segmentColors[idStr];
+  if(fixed) return new THREE.Color(fixed);
+  if(layer && layer.segmentDefaultColor) return new THREE.Color(layer.segmentDefaultColor);
+  return ngSegmentColor((layer && layer.segmentColorHash) || 0, BigInt(idStr));
+}
+// id -> {label, description, tags:[...], ...} for one segmentation source's segment_properties,
+// cached per (base, relDir) since several selected segments usually share one source.
+const _segPropsCache={};
+function fetchSegmentProperties(base, relDir){
+  const key = base+'/'+relDir;
+  if(!_segPropsCache[key]) _segPropsCache[key] = fetchJson(`${base}/${relDir}/info`).then(d=>{
+    const inline = d && d.inline; if(!inline || !inline.ids) return null;
+    const map={};
+    inline.ids.forEach((id,i)=>{
+      const props={};
+      (inline.properties||[]).forEach(p=>{
+        if(p.type==='tags') props.tags = (p.values[i]||[]).map(ti=>p.tags[ti]);
+        else if(p.values && p.values[i]!==undefined && p.values[i]!=='') props[p.id||p.type]=p.values[i];
+      });
+      map[id]=props;
+    });
+    return map;
+  }).catch(()=>null);
+  return _segPropsCache[key];
+}
+// returns [{type, mesh}] like loadRealOrganelles, so addRealOrganelles/the layer panel/LOD
+// streaming/GPU-pick all work unmodified — only the loading strategy differs.
+async function loadCustomOrganelles(state, onProgress){
+  const layers = (state.layers||[]).filter(l=>
+    l.type==='segmentation' && !l.archived && Array.isArray(l.segments) && l.segments.length);
+  if(!layers.length) return null;
+  const draco = await ensureDraco();
+  onProgress('resolving neuroglancer source(s)…');
+
+  const layerCtx=[];
+  for(const l of layers){
+    const base = resolveSourceUrl(l.source);
+    if(!base) continue;
+    let info;
+    try{ info = await fetchJson(`${base}/info`); }catch(e){ continue; }
+    if(!info || !info.mesh) continue;   // not a segmentation source, or no published meshes
+    const segIds = l.segments.map(String).filter(s=>/^\d+$/.test(s));
+    if(!segIds.length) continue;
+    const props = info.segment_properties ? await fetchSegmentProperties(base, info.segment_properties) : null;
+    // objectAlpha is neuroglancer's own mesh-opacity field for this layer; segmentColors/
+    // segmentDefaultColor/segmentColorHash (resolved per-segment below) are its color controls.
+    const alpha = typeof l.objectAlpha==='number' ? l.objectAlpha : 1;
+    layerCtx.push({ name: l.name || 'segmentation', meshBase: `${base}/${info.mesh}`, segIds, props, layer:l, alpha });
+  }
+  if(!layerCtx.length) return null;
+
+  meshTotalAvail=0; const jobs=[];
+  layerCtx.forEach(lc=>{ meshTotalAvail+=lc.segIds.length; lc.segIds.forEach(seg=>jobs.push({lc, seg})); });
+
+  let done=0;
+  const loaded = await pool(jobs, 8, async(j)=>{
+    let r=null, meta=null;
+    try{
+      meta = await meshMetaAt(j.lc.meshBase, j.seg);
+      if(!meta) return null;   // e.g. sharded lookup came up empty — id not actually in this source
+      meta._L0 = meta.legacy?0:coarsestLOD(meta.man);
+      meta._Linit = meta.legacy?0:mediumLOD(meta.man, meta._L0);
+      r = await loadLOD(draco, meta, meta._Linit);
+    }catch(e){ r=null; }
+    onProgress(`decoding meshes… ${++done}/${jobs.length}`);
+    if(!r) return null;
+    return {type:j.lc.name, posNm:r.posNm, idx:r.idx, meta, props: j.lc.props && j.lc.props[j.seg],
+      color: resolveSegmentColor(j.lc.layer, j.seg), alpha: j.lc.alpha};
+  });
+  const good=loaded.filter(Boolean);
+  if(!good.length) return null;
+
+  let mn=[1e30,1e30,1e30], mx=[-1e30,-1e30,-1e30];
+  for(const o of good){ const p=o.posNm; for(let i=0;i<p.length;i+=3){
+    if(p[i]<mn[0])mn[0]=p[i]; if(p[i]>mx[0])mx[0]=p[i];
+    if(p[i+1]<mn[1])mn[1]=p[i+1]; if(p[i+1]>mx[1])mx[1]=p[i+1];
+    if(p[i+2]<mn[2])mn[2]=p[i+2]; if(p[i+2]>mx[2])mx[2]=p[i+2]; }}
+  const ctr=[(mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2];
+  const ext=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1;
+  const fit=(CELL_R*1.7)/ext;
+  // per-axis extents in game units, for autoAvatarScale() — "1% of the dataset's smallest
+  // dimension" needs the actual loaded bounding box, not just the single max-axis fit scalar.
+  const dims=[(mx[0]-mn[0])*fit,(mx[1]-mn[1])*fit,(mx[2]-mn[2])*fit];
+  currentFit = {ctr, fit, dims};
+
+  const entries=[];
+  for(const o of good){
+    const g=buildLODGeometry(o.posNm, o.idx);
+    const mesh=new THREE.Mesh(g, omat(o.color, o.color.clone().multiplyScalar(0.22), o.alpha));
+    mesh.userData.r = g.boundingSphere.radius;
+    mesh.userData.center = g.boundingSphere.center.clone();
+    mesh.userData.real = true;
+    mesh.userData.meta = o.meta;
+    mesh.userData.lod = o.meta._Linit;
+    mesh.userData.loading = false;
+    mesh.userData.props = o.props;
+    mesh.userData.ngColor = o.color;   // this exact color takes priority over celldive's own unique-colors toggle (see applyColors)
     entries.push({type:o.type, mesh});
   }
   return entries;
@@ -896,7 +1302,13 @@ function manageLOD(dt){
   reals.sort((a,b)=>a.userData._d-b.userData._d);   // nearest first
   for(const mesh of reals){
     if(lodLoading>=LOD_MAXCONC) break;
-    const ud=mesh.userData; if(ud.loading || !ud.meta || !ud.meta.man) continue;  // legacy meshes have no LOD pyramid
+    const ud=mesh.userData;
+    if(ud.loading || !ud.meta || !ud.meta.man || ud.punched) continue;  // legacy meshes have no LOD pyramid; a punched mesh keeps its hole
+    // once you're actually standing/walking on a mesh, "distance to it" stops meaning anything
+    // (you're always ~r away, right at its surface) — without this, jetpack's tiny hover distance
+    // constantly reads as "very close, load the finest LOD", triggering repeated decode/rebuild
+    // churn just from standing still. Leave it at whatever level it loaded at.
+    if(skate.active && mesh===skate.root) continue;
     const want=pickLOD(ud.meta, ud._d, ud.r);
     // hysteresis: refine promptly, but only coarsen when clearly far — avoids thrash/popping
     if(want < ud.lod) startLODSwap(mesh, ud.lod-1);
@@ -969,8 +1381,10 @@ function clearScene(){
 function setLoad(msg){ const s=loadingEl.querySelector('span'); if(s) s.textContent=msg; }
 
 let diveToken=0;
-function startDive(d){
+// opts.skipHistory: true when called from popstate/boot (the hash already names this dive)
+function startDive(d, opts){
   spec = d;
+  applyDiveHash({s:d.id}, opts);
   selEl.classList.add('hidden');
   gameEl.classList.remove('hidden');
   loadingEl.classList.remove('hidden');
@@ -1007,6 +1421,48 @@ async function buildDive(d){
   if(!raf) raf = requestAnimationFrame(tick);
 }
 
+// name a custom dive after its first meaningfully-selected layer, for the HUD/tab title
+function ngStateName(state){
+  const l = (state.layers||[]).find(l=>l.type==='segmentation' && l.segments && l.segments.length);
+  return (l && l.name) || 'custom link';
+}
+// opts.skipHistory: true when called from popstate/boot (the hash already names this dive)
+function startCustomDive(state, opts){
+  spec = { id: ngStateName(state), organism:"—", tissue:"custom neuroglancer link", kind:"custom", note:"", custom:true, state };
+  applyDiveHash({ng: JSON.stringify(state)}, opts);
+  selEl.classList.add('hidden');
+  gameEl.classList.remove('hidden');
+  loadingEl.classList.remove('hidden');
+  setLoad('reading neuroglancer state…');
+  setTimeout(()=>buildCustomDive(spec), 50);
+}
+async function buildCustomDive(d){
+  const token = ++diveToken;
+  clearScene();
+  const rnd = mulberry(seedFromId(d.id));
+  buildScene(d, rnd);
+
+  // a user-supplied dataset failing to load should say so, not silently show a fake cell
+  let real=null, dataSource="couldn't load any meshes from this link";
+  try{
+    real = await Promise.race([
+      loadCustomOrganelles(d.state, setLoad),
+      new Promise(r=>setTimeout(()=>r('__timeout'), 40000))
+    ]);
+  }catch(e){ console.warn('custom mesh load failed:', e); real=null; }
+  if(token!==diveToken) return;
+  if(real==='__timeout'){ console.warn('custom mesh load timed out'); real=null; }
+
+  if(real && real.length){
+    addRealOrganelles(real);
+    dataSource = `${real.length} mesh${real.length===1?'':'es'} · custom neuroglancer source`;
+  }
+
+  finalizeDive(dataSource);
+  loadingEl.classList.add('hidden');
+  if(!raf) raf = requestAnimationFrame(tick);
+}
+
 // renderer + scene + camera + lights + membrane + dust (common to both modes)
 function buildScene(d, rnd){
   renderer = new THREE.WebGLRenderer({antialias:true});
@@ -1023,9 +1479,15 @@ function buildScene(d, rnd){
   camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.4, 4000);
   // start at a 3/4 corner angle looking at the centre, so the volume reads as 3D (not a flat face)
   playerPos.set(58,34,70); camera.position.copy(playerPos);
-  yaw=0.69; pitch=-0.38; vel.set(0,0,0);
+  yaw=0.69; pitch=-0.38; yawRaw=yaw; pitchRaw=pitch; vel.set(0,0,0);
+  uiFree=false; appEl.style.cursor='none';
+  document.getElementById('menuOverlay').classList.add('hidden');
+  document.getElementById('tabHint').innerHTML='press <b>TAB</b> for menu';
 
-  scene.add(new THREE.AmbientLight(0x33415a, 1.0));
+  // hemisphere over flat ambient: even unlit surfaces get a cool-from-above/warm-from-below
+  // gradient instead of one flat tint everywhere, for basically free — reads as much more
+  // three-dimensional without touching a single material.
+  scene.add(new THREE.HemisphereLight(0x4a6a9a, 0x2a1830, 1.0));
   headlamp = new THREE.PointLight(0xcfe2ff, 0.9, 380, 2);   // soft ambient fill from the diver
   camera.add(headlamp); scene.add(camera);
   const rim = new THREE.PointLight(0x4060a0, 0.7, 700); rim.position.set(-130,90,-70); scene.add(rim);
@@ -1049,11 +1511,28 @@ function buildScene(d, rnd){
   spotTarget = new THREE.Object3D(); spotTarget.position.set(0,0,-12);
   camera.add(spot); camera.add(spotTarget); spot.target = spotTarget;
 
+  // jetpack laser beam — a thin cylinder from the camera forward to whatever's aimed at;
+  // length/color updated live in tick() (updateLaser)
+  laserBeam = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1,6),
+    new THREE.MeshBasicMaterial({color:0x5588ff, transparent:true, opacity:0.85, depthTest:false}));
+  laserBeam.rotation.x=-Math.PI/2; laserBeam.renderOrder=997; laserBeam.visible=laserOn;
+  camera.add(laserBeam);
+
   // plasma membrane (seen from inside)
   const membrane = blob(CELL_R, 96, 0.13, 1.4, new THREE.MeshStandardMaterial({
     color:0x21314f, emissive:0x0a1530, emissiveIntensity:0.5, roughness:0.9,
     side:THREE.BackSide, transparent:true, opacity:0.92}), null, rnd);
   membrane.receiveShadow=true; scene.add(membrane);
+
+  // jetpack's floor collision (tick()) is otherwise invisible — an actual plane to land on,
+  // sized to reach the membrane at that height (sphere cross-section radius at JET_FLOOR_Y).
+  const floorReach = Math.sqrt(Math.max(1, CELL_R*CELL_R - JET_FLOOR_Y*JET_FLOOR_Y)) + 4;
+  floorMesh = new THREE.Mesh(new THREE.CircleGeometry(floorReach, 48), new THREE.MeshStandardMaterial({
+    color:0x1a2438, emissive:0x0a1428, emissiveIntensity:0.5, roughness:0.85,
+    side:THREE.DoubleSide, transparent:true, opacity:0.85}));
+  floorMesh.rotation.x=-Math.PI/2; floorMesh.position.y=JET_FLOOR_Y;
+  floorMesh.receiveShadow=true; floorMesh.visible = explorationMode==='jetpack';
+  scene.add(floorMesh);
 
   // floating cytosol dust for parallax
   dust = new THREE.Group();
@@ -1141,10 +1620,33 @@ function makeKinesin(){
 function makeAvatar(){ return avatarMode==="kinesin" ? makeKinesin() : makeBus(); }
 function avatarName(){ return avatarMode==="kinesin" ? "kinesin" : "bus"; }
 function avatarHover(){ return SKATE_HOVER * Math.max(0.55, Math.sqrt(avatarScale)); }
+// avatarHover()/SKATE_PROBE are sized for the AVATAR, not the mesh it's standing on — fine for a
+// big root like the nucleus, but on anything smaller than ~2x SKATE_PROBE the fixed-distance probe
+// used to keep you snapped to the surface can overshoot clean through the mesh (or the far side of
+// a thin shell) and get a bogus hit, which reads as violent jitter/detach-reattach cycling. Scale
+// both down to the root's own size so tracking stays local to the surface you're actually on.
+// floor is well clear of the camera's own near-clip plane (0.4) — too close and the surface
+// you're standing on clips/z-fights right in front of the camera, which was also likely why the
+// laser's crosshair raycast felt like it "wasn't working" while standing on something small.
+function hoverFor(root){ const r=(root&&root.userData&&root.userData.r)||30; return Math.min(avatarHover(), Math.max(1.5, r*0.12)); }
+function probeFor(root){ const r=(root&&root.userData&&root.userData.r)||30; return Math.max(2.5, Math.min(SKATE_PROBE, r*0.7)); }
 function avatarMoveScale(){ return Math.max(0.16, Math.min(1.35, Math.sqrt(avatarScale))); }
 function applyAvatarScale(updateTools=true){
   if(bus) bus.scale.setScalar(avatarScale);
   if(updateTools) setToolStates();
+}
+// "Am I mito-sized or ant-sized?" varies a lot between dives because there's no fixed nm-per-unit
+// scale — each dive's real meshes get recentred + rescaled (currentFit.fit) so whatever was loaded
+// fills the same fixed CELL_R play volume, regardless of the real-world size of that specimen's
+// content. avatarScale is a separate, fixed dimensionless number, so how big the avatar reads
+// relative to a mitochondrion ends up different every dataset. Derive it instead from the actual
+// loaded mesh sizes so "clearly smaller than a typical organelle" holds across every dive.
+function autoAvatarScale(){
+  const hasReal = currentFit && currentFit.dims && [...targets.map(t=>t.mesh), ...decor].some(m=>m.userData && m.userData.real);
+  if(!hasReal) return explorationMode==='jetpack' ? 0.12 : 1;   // procedural cells use fixed absolute sizes already
+  const smallestDim = Math.min(...currentFit.dims);
+  const frac = explorationMode==='jetpack' ? 0.0001 : 0.025;   // jetpack: noticeably smaller again, for stable surface-walking
+  return Math.max(AVATAR_MIN_SCALE, Math.min(AVATAR_MAX_SCALE, smallestDim*frac));
 }
 function disposeObject(obj){
   if(!obj) return;
@@ -1168,6 +1670,7 @@ function rebuildAvatar(){
 function cycleAvatar(){
   avatarMode = avatarMode==="bus" ? "kinesin" : "bus";
   rebuildAvatar();
+  syncModeHash();
   flash(avatarName()+" avatar");
 }
 function resizeAvatar(delta){
@@ -1186,7 +1689,7 @@ function addRealOrganelles(entries){
       mesh.userData.spin=0;  // real geometry is offset from origin — spinning would orbit
       mesh.userData.type=type; mesh.userData.uid=++segCounter;
       mesh.castShadow=true; mesh.receiveShadow=true;
-      if(i===0) targets.push({type, name:ORG[type].name, mesh, center:mesh.userData.center, reachR:mesh.userData.r, found:false});
+      if(i===0) targets.push({type, name:ORG[type]?ORG[type].name:type, mesh, center:mesh.userData.center, reachR:mesh.userData.r, found:false});
       else decor.push(mesh);
     });
   });
@@ -1230,15 +1733,33 @@ function finalizeDive(dataSource){
   ui.specSrc.textContent = dataSource;
   foundCount=0; objIdx=0;
   ui.found.textContent = "0 / "+targets.length;
+  jetFuel=1;
+  avatarScale = autoAvatarScale();
+  applyAvatarScale(false);
+  const isJetpack = explorationMode==='jetpack';
+  document.getElementById('fuelRow').classList.toggle('hidden', !isJetpack);
+  document.getElementById('helpJetpack').classList.toggle('hidden', !isJetpack);
+  if(ui.fuel) ui.fuel.textContent = JET_INFINITE_FUEL ? '∞' : '100%';
+  laserOn = isJetpack;   // laser starts on for jetpack — it's the tool for getting inside things
+  if(laserBeam) laserBeam.visible = laserOn;
   document.getElementById('win').classList.remove('show');
   card.el.classList.remove('show');
   buildLayerPanel();
   applyColors();              // honour the unique-colours toggle across dives
   narratedTypes.clear();
   touring=false; thirdPerson=false; busRoll=0; questActive=false;
+  // custom-source dives have no ORG biology, so the analyze/objective/cargo-run/tour/narration
+  // systems (all keyed to it) don't apply — hide them and just let you fly around and hover meshes.
+  const custom = !!spec.custom;
+  if(custom && narrationOn){ narrationOn=false; if('speechSynthesis' in window) speechSynthesis.cancel(); }
+  ui.obj.classList.toggle('hidden', custom);
+  document.getElementById('found').closest('.row')?.classList.toggle('hidden', custom);
+  [tools.cargo, tools.narr, tools.tour].forEach(b=>b.classList.toggle('hidden', custom));
   setToolStates();
-  nextObjective();
-  if(narrationOn) setTimeout(()=>narrate("Welcome aboard! This is "+spec.id+". Drive up to any organelle and I'll tell you all about it. Or press T to take the tour!"), 400);
+  if(!custom){
+    nextObjective();
+    if(narrationOn) setTimeout(()=>narrate("Welcome aboard! This is "+spec.id+". Drive up to any organelle and I'll tell you all about it. Or press T to take the tour!"), 400);
+  }
 }
 
 // ng-style layer panel: one row per organelle type with its colour, a visibility
@@ -1306,11 +1827,19 @@ function colorKey(m){
 }
 function applyColors(){
   clearHover();   // drop the hover glow before recolouring; it re-applies next frame
+  // custom-source dives have no ORG biology to color by type, so they always use the
+  // per-real-segment hue regardless of the toolbar toggle (which still applies normally
+  // to OpenOrganelle dives).
+  const forceUnique = spec && spec.custom;
   [...targets.map(t=>t.mesh), ...decor].forEach(m=>{
     const o = ORG[m.userData.type] || {color:0x9aa6b8, emissive:0x14171f};
     const hue = segHue(colorKey(m));
+    const ngColor = m.userData.ngColor;   // resolved from the pasted link's own color settings — takes priority
     m.traverse(x=>{ if(x.isMesh && x.material){
-      if(uniqueColors){
+      if(ngColor){
+        x.material.color.copy(ngColor);
+        if(x.material.emissive) x.material.emissive.copy(ngColor).multiplyScalar(0.22);
+      } else if(uniqueColors || forceUnique){
         x.material.color.setHSL(hue, 0.72, 0.55);
         if(x.material.emissive) x.material.emissive.setHSL(hue, 0.72, 0.12);  // glow must match, or the per-type emissive tints everything
       } else {
@@ -1384,7 +1913,7 @@ function startTour(){
   narrate("All aboard the cell bus! Let's take a tour. First stop, coming right up!");
   setToolStates();
 }
-function stopTour(){ touring=false; tourDwell=0; setToolStates(); }
+function stopTour(){ touring=false; tourDwell=0; yawRaw=yaw; pitchRaw=pitch; setToolStates(); }
 function updateTour(dt){
   if(tourIdx>=targets.length){ narrate("And that's the whole cell! Take the wheel and explore on your own."); stopTour(); return; }
   const t=targets[tourIdx];
@@ -1544,17 +2073,18 @@ function winQuest(){
 
 // ---- controls ----------------------------------------------------
 const keys={};
-addEventListener('keydown', e=>{ if(e.code==="Space") e.preventDefault();
+addEventListener('keydown', e=>{ if(e.code==="Space"||e.code==="Tab") e.preventDefault();
   if(!e.repeat && !gameEl.classList.contains('hidden')){
-    if(e.code==="Space" && skate.active) jumpSkate();
-    else if(e.code==="KeyR" && skate.active) jumpSkate();
+    if(e.code==="Tab") setUiFree(!uiFree);
+    else if(e.code==="Space" && skate.active) liftOff();
+    else if(e.code==="KeyR" && skate.active) liftOff();
     else if(e.code==="KeyV") toggleView();
-    else if(e.code==="KeyN") toggleNarration();
-    else if(e.code==="KeyT") (touring?stopTour():startTour());
+    else if(e.code==="KeyN" && !spec.custom) toggleNarration();
+    else if(e.code==="KeyT" && !spec.custom) (touring?stopTour():startTour());
     else if(e.code==="KeyC") toggleColors();
     else if(e.code==="KeyH") toggleShadows();
     else if(e.code==="KeyM") setAmbience();
-    else if(e.code==="KeyG") (questActive?stopCargoRun():startCargoRun());
+    else if(e.code==="KeyG" && !spec.custom) (questActive?stopCargoRun():startCargoRun());
     else if(e.code==="KeyX") toggleSkateMode();
     else if(e.code==="KeyK") cycleAvatar();
     else if(e.code==="BracketLeft") resizeAvatar(-1);
@@ -1570,18 +2100,58 @@ addEventListener('wheel', e=>{
   flash('torch '+(spotIntensity<=0?'off':Math.round(spotIntensity/9*100)+'%'));
 }, {passive:false});
 addEventListener('keyup',   e=>{ keys[e.code]=false; });
-let dragging=false,lastX=0,lastY=0,yaw=0,pitch=0;
-appEl.addEventListener('pointerdown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; appEl.style.cursor='grabbing'; try{e.target.setPointerCapture(e.pointerId)}catch(_){} });
-appEl.addEventListener('pointerup',   ()=>{ dragging=false; appEl.style.cursor='grab'; });
-appEl.addEventListener('pointermove', e=>{ if(!dragging) return;
-  const dx=e.clientX-lastX, dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
-  yaw-=dx*0.0026; pitch-=dy*0.0026; pitch=Math.max(-1.45,Math.min(1.45,pitch)); });
-appEl.style.cursor='grab';
+let lastX=0,lastY=0,yaw=0,pitch=0,yawRaw=0,pitchRaw=0,haveLastPos=false,uiFree=false,pointerLocked=false;
+// look follows the cursor by default (no button needed). TAB toggles a "menu" mode that
+// pauses look and frees the cursor for the toolbar/layer panel — reaching those otherwise means
+// crossing the game view first, which spins the camera around before you ever get there.
+function setUiFree(v){
+  uiFree=v; haveLastPos=false; fireHeld=false;
+  appEl.style.cursor = uiFree ? 'default' : 'none';
+  document.getElementById('menuOverlay').classList.toggle('hidden', !uiFree);
+  const hint=document.getElementById('tabHint');
+  if(hint) hint.innerHTML = uiFree ? 'press <b>TAB</b> to resume flying' : 'press <b>TAB</b> for menu';
+  // release the OS cursor for clicking toolbar buttons — Pointer Lock keeps it invisible AND
+  // pinned to the canvas, which would make the menu unusable
+  if(uiFree && document.pointerLockElement===appEl) document.exitPointerLock();
+}
+// Pointer Lock: the real, standard way browser games do mouse-look — locks + hides the OS
+// cursor and gives unbounded relative movement (no more hitting the edge of the screen, and no
+// more the cursor visibly wandering off while you're looking around). Requested on click, same
+// as every other pointer-lock game. Deliberately optional, not required: this file is meant to
+// also work embedded in a cross-origin iframe, where pointer lock can be blocked entirely unless
+// the embedding page grants it — if the request fails/is unavailable, everything just keeps
+// working exactly as it already did (clientX/Y deltas, non-locked), no different code path needed.
+function requestLook(){
+  if(uiFree || document.pointerLockElement===appEl || !appEl.requestPointerLock) return;
+  try{ const p=appEl.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
+}
+document.addEventListener('pointerlockchange', ()=>{
+  pointerLocked = document.pointerLockElement===appEl;
+  haveLastPos=false;
+});
+appEl.addEventListener('pointerdown', e=>{ if(e.button===0 && !uiFree){ fireHeld=true; requestLook(); } });
+appEl.addEventListener('pointerup',   ()=> fireHeld=false);
+appEl.addEventListener('pointerleave', ()=> fireHeld=false);
+// yaw/pitch (actually used to build the camera) chase this raw target with a little smoothing
+// each tick — a deliberate slight lag rather than a hard snap — instead of updating the look
+// angle directly on every event.
+appEl.addEventListener('pointermove', e=>{
+  if(uiFree){ haveLastPos=false; return; }
+  let dx, dy;
+  if(pointerLocked){ dx=e.movementX||0; dy=e.movementY||0; }
+  else{
+    if(!haveLastPos){ lastX=e.clientX; lastY=e.clientY; haveLastPos=true; return; }
+    dx=e.clientX-lastX; dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
+  }
+  yawRaw-=dx*0.0026; pitchRaw-=dy*0.0026; pitchRaw=Math.max(-1.45,Math.min(1.45,pitchRaw));
+});
+appEl.style.cursor='none';
 
 const vel=new THREE.Vector3(), fwd=new THREE.Vector3(), right=new THREE.Vector3();
 const WORLD_UP=new THREE.Vector3(0,1,0);
 const WORLD_DOWN=new THREE.Vector3(0,-1,0);
 const _sk0=new THREE.Vector3(), _sk1=new THREE.Vector3(), _sk2=new THREE.Vector3(), _sk3=new THREE.Vector3();
+const _prevPlayerPos=new THREE.Vector3(), _jetHitNormal=new THREE.Vector3();
 const _skMat=new THREE.Matrix4();
 const _skQuat=new THREE.Quaternion();
 const _sn0=new THREE.Vector3(), _sn1=new THREE.Vector3(), _sn2=new THREE.Vector3(), _sn3=new THREE.Vector3(), _sn4=new THREE.Vector3();
@@ -1607,11 +2177,16 @@ function skateRootName(root){
   return type && ORG[type] ? ORG[type].name : (type || "surface");
 }
 function skateRoots(){
+  // SKATE_MIN_R is sized for a normal-sized avatar (flight/skateboarding) — for jetpack's
+  // much-smaller-than-a-mesh avatar, that fixed threshold excluded most small organelles from
+  // ever being landable at all ("doesn't work when there's lots of meshes"). Scale it down with
+  // avatar size so a tiny avatar can land on tiny things too.
+  const minR = Math.max(0.3, SKATE_MIN_R*Math.sqrt(avatarScale));
   const seen=new Set(), out=[];
   const add=m=>{
     if(!m || seen.has(m) || !isVisibleObject(m)) return;
     const r=m.userData.r || m.userData.reachR || 0;
-    if(r < SKATE_MIN_R) return;
+    if(r < minR) return;
     seen.add(m); out.push(m);
   };
   targets.forEach(t=>add(t.mesh));
@@ -1710,9 +2285,10 @@ function findSkateSurface(){
   }
   return best;
 }
-function attachSkate(found){
+function attachSkate(found, mode){
   boardAir.active=false;
   skate.active=true;
+  skate.mode=mode||"board";
   skate.root=found.root;
   skate.type=found.root.userData.type || null;
   const hitNormal=rawOrientedHitNormal(found.hit);
@@ -1722,19 +2298,29 @@ function attachSkate(found){
   if(skate.forward.lengthSq()<1e-4) skate.forward.copy(vel).projectOnPlane(skate.normal);
   if(skate.forward.lengthSq()<1e-4) skate.forward.copy(right).projectOnPlane(skate.normal);
   skate.forward.normalize();
-  skate.lastPoint.copy(found.hit.point);
   updateSkateGravity();
   skate.lean=0;
   skate.grace=0;
-  playerPos.copy(found.hit.point).addScaledVector(skate.normal, avatarHover());
+  if(mode==='walk'){
+    // jetpack auto-landing should ease onto a surface as it's reached, not teleport the instant
+    // one's detected underneath — leave playerPos exactly where the fall put it; resnapSkate's
+    // existing per-frame lerp (already used for ongoing tracking) pulls it snugly onto the real
+    // surface point over the next few frames instead of an instant jump. Manual skateboard-mount
+    // (X) below still grabs on immediately, which is the point of pressing it.
+    skate.lastPoint.copy(playerPos).addScaledVector(skate.normal, -hoverFor(found.root));
+  } else {
+    skate.lastPoint.copy(found.hit.point);
+    playerPos.copy(found.hit.point).addScaledVector(skate.normal, hoverFor(found.root));
+  }
   vel.projectOnPlane(skate.normal);
   if(vel.lengthSq()<16){
     _sk0.copy(fwd).projectOnPlane(skate.normal);
     if(_sk0.lengthSq()>1e-4) vel.addScaledVector(_sk0.normalize(), 10);
   }
   touring=false;
-  thirdPerson=true;
-  flash((skate.side==="inside"?"inside ":"")+"skateboarding "+skateRootName(found.root));
+  // view stays whatever it already was — don't yank the player into third person just for landing
+  const verb = skate.mode==="walk" ? "walking on " : "skateboarding ";
+  flash((skate.side==="inside"?"inside ":"")+verb+skateRootName(found.root));
   setToolStates();
 }
 function detachSkate(kick, msg){
@@ -1746,19 +2332,36 @@ function detachSkate(kick, msg){
   skate.side="outside";
   skate.lean=0;
   skate.grace=0;
+  jetLandGrace=0.5;   // don't immediately re-snap back onto whatever you just left
   if(msg) flash(msg);
   setToolStates();
+}
+// SPACE/R while standing: in jetpack mode this should actually jetpack you off the ground, not
+// do a skateboard-style hop-and-land-back-in-the-same-spot (jumpSkate/boardAir) — that mechanic
+// is what was making it feel like "jetpack doesn't work" right after leaving a surface. Detach
+// and give a small kick; SPACE is still held on the very same keypress, so free-flight jetpack
+// thrust (in tick()) picks up immediately afterward and actually carries you up.
+function liftOff(){
+  if(!skate.active) return;
+  if(explorationMode==='jetpack' && skate.mode==='walk'){
+    const n=_sk0.copy(skate.normal);
+    detachSkate(false, "jetpack!");
+    vel.addScaledVector(n, 6);
+    return;
+  }
+  jumpSkate();
 }
 function jumpSkate(){
   if(!skate.active) return;
   const n=_sk0.copy(skate.normal);
   const launch=_sk1.copy(fwd).projectOnPlane(n);
-  const launchRoot=skate.root, launchSide=skate.side;
+  const launchRoot=skate.root, launchSide=skate.side, launchMode=skate.mode;
   const launchGravity=_sk2.copy(skate.gravity);
   detachSkate(false, "jump");
   boardAir.active=true;
   boardAir.root=launchRoot;
   boardAir.side=launchSide;
+  boardAir.mode=launchMode;   // land back into the SAME mode you jumped from — walking stays walking, never skateboards
   boardAir.normal.copy(n);
   boardAir.gravity.copy(launchGravity);
   boardAir.age=0;
@@ -1770,8 +2373,9 @@ function jumpSkate(){
   scanCooldown=0.28;
 }
 function toggleSkateMode(){
-  if(boardAir.active){ boardAir.active=false; setToolStates(); flash("flight"); return; }
-  if(skate.active){ detachSkate(true, "detached"); return; }
+  if(boardAir.active){ boardAir.active=false; jetLandGrace=0.5; setToolStates(); flash("flight"); return; }
+  if(skate.active){ detachSkate(true, skate.mode==='walk'?"stopped walking":"detached"); return; }
+  if(explorationMode==='jetpack'){ flash("no skateboard in jetpack mode — land on a surface to walk it"); return; }
   const found=findSkateSurface();
   if(found) attachSkate(found);
   else flash("no boardable surface");
@@ -1779,10 +2383,16 @@ function toggleSkateMode(){
 function resnapSkate(dt){
   const root=skate.root;
   if(!root || !isVisibleObject(root)){ detachSkate(false, "surface hidden"); return; }
-  const origin=_sk0.copy(playerPos).addScaledVector(skate.normal, SKATE_PROBE);
-  const hit=raycastSkateRoots(origin, _sk1.copy(skate.normal).negate(), SKATE_PROBE*2 + avatarHover() + 8, [root]);
+  const probe=probeFor(root), hover=hoverFor(root);
+  const origin=_sk0.copy(playerPos).addScaledVector(skate.normal, probe);
+  const hit=raycastSkateRoots(origin, _sk1.copy(skate.normal).negate(), probe*2 + hover + 8, [root]);
   let found=hit;
-  if(!found){
+  // the toward-center fallback exists to re-find a surface you're skimming near the edge of —
+  // but on a mesh you've cut a hole into, that same fallback would happily bridge straight across
+  // the gap to the far inner wall and re-attach you there, which is exactly "won't let me fall
+  // through". Skip it for punched meshes: losing the primary probe there should just mean you're
+  // over the hole, so let it fall through to the grace-then-detach path below instead.
+  if(!found && !root.userData.punched){
     const c=skateRootCenter(root);
     const dir=_sk1.copy(c).sub(playerPos);
     if(dir.lengthSq()>1e-4) found=raycastSkateRoots(playerPos, dir, dir.length() + (root.userData.r||0) + 8, [root]);
@@ -1793,7 +2403,7 @@ function resnapSkate(dt){
     if(targetNormal.dot(skate.normal)<0) targetNormal.negate();
     skate.normal.lerp(targetNormal, 1-Math.exp(-2.6*dt)).normalize();
     skate.lastPoint.lerp(found.hit.point, 1-Math.exp(-24*dt));
-    playerPos.copy(skate.lastPoint).addScaledVector(skate.normal, avatarHover());
+    playerPos.copy(skate.lastPoint).addScaledVector(skate.normal, hover);
     vel.projectOnPlane(skate.normal);
     updateSkateGravity();
   } else {
@@ -1847,6 +2457,35 @@ function updateSkate(dt, boost, anyDrive){
   playerPos.addScaledVector(vel, dt);
   resnapSkate(dt);
 }
+// jetpack's auto-landing walks, it doesn't skateboard: direct, responsive movement snapped to the
+// surface tangent plane, no lean/carve momentum — reuses the same surface-latch (attach/resnap/
+// detach) as skateboarding, just with plain-walk physics instead of updateSkate's carving model.
+function updateWalk(dt, boost, anyDrive){
+  if(!skate.active) return;
+  updateSkateGravity();
+  const f=_sk1.copy(fwd).projectOnPlane(skate.normal);
+  if(f.lengthSq()<1e-4) f.copy(vel).projectOnPlane(skate.normal);
+  if(f.lengthSq()<1e-4) f.copy(right).projectOnPlane(skate.normal);
+  f.normalize();
+  const r=_sk2.crossVectors(f, skate.normal).normalize();
+  skate.forward.copy(f);
+  skate.lean=0;
+
+  const speed=18*(boost>1?1.6:1);   // walk mode is jetpack-only and jetpack's avatar is deliberately
+  // tiny — flat speed, not scaled down by avatarMoveScale(), for the same reason as the WASD accel above
+  const want=_sk3.set(0,0,0);
+  if(keys['KeyW']) want.addScaledVector(f, speed);
+  if(keys['KeyS']) want.addScaledVector(f, -speed);
+  if(keys['KeyD']) want.addScaledVector(r, speed);
+  if(keys['KeyA']) want.addScaledVector(r, -speed);
+  // snap toward the desired velocity rather than accelerate-and-coast — no momentum carry is
+  // exactly what makes this read as walking instead of skating.
+  vel.lerp(want, 1-Math.exp(-12*dt));
+  vel.projectOnPlane(skate.normal);
+  if(!anyDrive && vel.lengthSq()<0.01) vel.set(0,0,0);
+  playerPos.addScaledVector(vel, dt);
+  resnapSkate(dt);
+}
 function updateBoardAir(dt){
   if(!boardAir.active) return;
   boardAir.age += dt;
@@ -1857,19 +2496,87 @@ function updateBoardAir(dt){
 }
 function tryBoardAirLand(dt){
   if(!boardAir.active || boardAir.cooldown>0 || !boardAir.root || !isVisibleObject(boardAir.root)) return;
-  const far=avatarHover()+Math.max(18, vel.length()*dt*3.2);
+  const rootR=boardAir.root.userData.r||30;
+  const far=hoverFor(boardAir.root)+Math.min(rootR*1.5, Math.max(8, vel.length()*dt*3.2));
   let found=raycastSkateRoots(playerPos, _sk0.copy(boardAir.gravity), far, [boardAir.root]);
   if(!found && boardAir.side==="outside") found=raycastSkateRoots(playerPos, _sk0.copy(boardAir.normal).negate(), far*1.4, [boardAir.root]);
   if(!found && boardAir.side==="inside") found=raycastSkateRoots(playerPos, _sk0.copy(WORLD_DOWN), far*1.2, [boardAir.root]);
   if(found && found.root===boardAir.root){
     boardAir.active=false;
-    attachSkate(found);
+    attachSkate(found, boardAir.mode);
   }
+}
+// jetpack mode: meshes are solid from EVERY direction, not just "landable from above" — flying
+// straight at one sideways, from underneath, whatever, should stop you rather than clip through.
+// Swept raycast from where you were to where this frame's move just put you; if that crossed a
+// real mesh's surface, push back out to just outside it and kill the into-surface component of
+// velocity (slide along it) instead of letting the tunnel-through happen.
+// skateRoots() itself (a full pass over every mesh) is the expensive part — this runs every
+// frame unconditionally (unlike the throttled auto-land check), so only refresh the candidate
+// list periodically and reuse it for the in-between frames' swept raycast; the raycast itself
+// still uses this frame's exact prev/current position, so accuracy doesn't suffer, just the
+// "who's worth considering" list lags by up to jetCollideTimer's interval (padded for it below).
+let jetCollideRoots=[], jetCollideTimer=0;
+function jetpackCollide(prevPos, dt){
+  const delta=_sk3.copy(playerPos).sub(prevPos), moveLen=delta.length();
+  if(moveLen<1e-5) return;
+  const dir=delta.multiplyScalar(1/moveLen);
+  jetCollideTimer-=dt;
+  if(jetCollideTimer<=0){
+    // jetpack speed is flat now (not scaled down with avatarScale — see the WASD accel comment
+    // above), so a mesh can go from "outside the cached radius" to "already collided" within one
+    // refresh window faster than this was first tuned for, which is very likely what let you
+    // punch straight up through something's underside instead of being stopped by it. Refresh
+    // more often and pad the radius more generously.
+    jetCollideTimer=0.1;
+    const probeDist=40;
+    jetCollideRoots=skateRoots().filter(m=>{
+      const c=skateRootCenter(m), r=m.userData.r||0;
+      const d=prevPos.distanceTo(c);
+      if(m.userData.punched && d<r) return false;   // already inside via a hole — don't block re-entry/exit
+      return d-r < probeDist;
+    });
+  }
+  if(!jetCollideRoots.length) return;
+  const found=raycastSkateRoots(prevPos, dir, moveLen+0.5, jetCollideRoots);
+  if(!found) return;
+  const n=_jetHitNormal.copy(sampledHitNormal(found.hit));
+  if(n.dot(dir)>0) n.negate();   // orient outward relative to travel direction, not playerPos (which may already be past the surface)
+  playerPos.copy(found.hit.point).addScaledVector(n, hoverFor(found.root));
+  vel.projectOnPlane(n);
+}
+// jetpack mode: meshes are "solid" underfoot — while falling (not already skating), check just
+// below for a surface and auto-latch onto it in WALK mode (updateWalk) — reuses the surface-latch
+// tracking (attach/resnap/detach) but not the skateboard's carving physics; jetpack shouldn't
+// turn into a skateboard just because you landed on something.
+let jetLandTimer=0, jetLandGrace=0;
+function tryJetpackLand(dt){
+  jetLandGrace=Math.max(0, jetLandGrace-dt);
+  if(jetLandGrace>0) return;   // just left a surface — give thrust a moment to actually work
+  // before the very next 80ms check can snap you right back onto the same spot
+  jetLandTimer-=dt; if(jetLandTimer>0) return; jetLandTimer=0.15;   // dense specimens (hundreds of small nearby meshes) make even the cheap prefilter add up at 80ms
+  const probeDist=avatarHover()+5;
+  // cheap bounding-sphere distance filter BEFORE the real (per-triangle) raycast — without this,
+  // every ~80ms did a full raycast against every mesh in the dive (up to 600 on a busy specimen),
+  // most of them nowhere near the player. This is what was making jetpack mode's frame rate sag.
+  const roots=skateRoots().filter(m=>{
+    const c=skateRootCenter(m), r=m.userData.r||0;
+    const d=playerPos.distanceTo(c);
+    // once you're inside a mesh you've cut a hole into, don't auto-land on its own inner wall —
+    // the cavity is usually barely bigger than the hole itself, so surface-tracking there reads
+    // as "movement is broken"/weird gravity. Free-flying inside (plain jetpack gravity+thrust,
+    // no surface snap) is simpler and is what "falling in" should actually feel like.
+    if(m.userData.punched && d < r) return false;
+    return d - r < probeDist;
+  });
+  if(!roots.length) return;
+  const found=raycastSkateRoots(playerPos, _sk0.copy(WORLD_DOWN), probeDist, roots);
+  if(found) attachSkate(found, 'walk');
 }
 
 // ---- HUD refs ----------------------------------------------------
 const ui = {
-  depth:document.getElementById('depth'), speed:document.getElementById('speed'),
+  depth:document.getElementById('depth'), speed:document.getElementById('speed'), fuel:document.getElementById('fuel'),
   found:document.getElementById('found'), objName:document.getElementById('objName'),
   obj:document.getElementById('obj'), objHint:document.getElementById('objHint'),
   flash:document.getElementById('flash'), specId:document.getElementById('specId'),
@@ -1913,7 +2620,16 @@ function showWin(){
 }
 document.getElementById('winAgain').onclick = exitToSelect;
 document.getElementById('exitBtn').onclick = exitToSelect;
-function exitToSelect(){ if('speechSynthesis' in window) speechSynthesis.cancel(); touring=false; clearScene(); gameEl.classList.add('hidden'); document.getElementById('win').classList.remove('show'); selEl.classList.remove('hidden'); }
+document.getElementById('copyLinkBtn').onclick = ()=>{
+  (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject())
+    .then(()=>flash('link copied!'), ()=>flash('copy failed — copy from the address bar'));
+};
+// opts.skipHistory: true when called from popstate/boot (the hash is already correct — don't touch history)
+function exitToSelect(opts){
+  if(!(opts&&opts.skipHistory)) history.pushState(null,'',location.pathname+location.search);
+  if('speechSynthesis' in window) speechSynthesis.cancel(); touring=false; clearScene(); spec=null;
+  gameEl.classList.add('hidden'); document.getElementById('win').classList.remove('show'); selEl.classList.remove('hidden');
+}
 
 // ---- toolbar (narration / tour / colors / shadows / view) --------
 const tools = {
@@ -1921,8 +2637,11 @@ const tools = {
   amb:document.getElementById('tAmb'), color:document.getElementById('tColor'), shadow:document.getElementById('tShadow'),
   view:document.getElementById('tView'), skate:document.getElementById('tSkate'),
   avatar:document.getElementById('tAvatar'), shrink:document.getElementById('tShrink'), grow:document.getElementById('tGrow'),
+  laser:document.getElementById('tLaser'),
 };
 function setToolStates(){
+  tools.laser.classList.toggle('hidden', explorationMode!=='jetpack');
+  tools.laser.classList.toggle('on', laserOn);
   tools.cargo.classList.toggle('on', questActive);
   tools.cargo.textContent = questActive ? '✕ end run' : '🎯 cargo run';
   tools.narr.classList.toggle('on', narrationOn);
@@ -1934,7 +2653,11 @@ function setToolStates(){
   tools.view.classList.toggle('on', thirdPerson);
   tools.view.textContent = thirdPerson ? '✕ first view' : (avatarMode==="kinesin" ? '🧬 avatar view' : '🚌 bus view');
   tools.skate.classList.toggle('on', skate.active || boardAir.active);
-  tools.skate.textContent = skate.active ? '✕ detach' : boardAir.active ? '↧ air' : '🛹 skateboard';
+  // in jetpack mode there's no manual "start skateboarding" option — you only ever end up
+  // attached (walking) by landing on something — so hide the button unless there's something
+  // to stop.
+  tools.skate.classList.toggle('hidden', explorationMode==='jetpack' && !skate.active && !boardAir.active);
+  tools.skate.textContent = skate.active ? (skate.mode==='walk' ? '✕ stop walking' : '✕ detach') : boardAir.active ? '↧ air' : '🛹 skateboard';
   tools.avatar.classList.toggle('on', avatarMode==="kinesin");
   tools.avatar.textContent = avatarMode==="kinesin" ? '🧬 kinesin' : '🚌 bus';
   tools.shrink.textContent = '- '+Math.round(avatarScale*100)+'%';
@@ -1954,6 +2677,12 @@ tools.skate.onclick = toggleSkateMode;
 tools.avatar.onclick = cycleAvatar;
 tools.shrink.onclick = ()=> resizeAvatar(-1);
 tools.grow.onclick = ()=> resizeAvatar(1);
+tools.laser.onclick = ()=>{ laserOn=!laserOn; if(laserBeam) laserBeam.visible=laserOn; setToolStates(); flash(laserOn?'laser on':'laser off'); };
+document.getElementById('menuClose').onclick = ()=> setUiFree(false);
+// clicking the dimmed backdrop (not the panel itself) also resumes, like any normal modal
+document.getElementById('menuOverlay').addEventListener('pointerdown', e=>{
+  if(e.target.id==='menuOverlay') setUiFree(false);
+});
 
 // mesh-detail slider: caps how fine LODs may load (full = current behaviour; lower = coarser)
 const resSlider=document.getElementById('resSlider'), resVal=document.getElementById('resVal');
@@ -2023,6 +2752,105 @@ function gpuPick(){
   return uid ? (byUid.get(uid)||null) : null;               // uid 0 = empty (crosshair on nothing)
 }
 
+// ---- jetpack laser: aim + progressive mesh hole-punching --------
+// Drills a cylinder into a REAL mesh along the shot's entry point/direction (frozen the moment
+// you start firing on it), removing triangles from its index buffer — so the near wall opens
+// first, not both sides of a hollow shell at once. Depth grows with how long you hold the trigger
+// on the same target ("heat", shown on the beam colour), so a quick tap just crater the surface
+// and sustained fire eventually drills clean through. Capped to bounded-size meshes (a full index
+// rebuild isn't free) and marks the mesh 'punched' so manageLOD leaves the hole alone afterward.
+// real meshes at their default "medium" LOD can run well past a couple hundred thousand
+// triangles for big organelles (nucleus, etc) — the old, much lower cap here silently refused to
+// cut those specific meshes at all (while working fine on smaller ones right next to them),
+// which read as "the laser doesn't always work" with no visible reason why.
+const LASER_MAX_RANGE=70, LASER_PUNCH_TRIS=1500000, LASER_MAX_DEPTH=40, LASER_HEAT_SECONDS=4;
+const _laserRay=new THREE.Raycaster();
+let laserTargetMesh=null, laserHeat=0, laserTooBigWarned=false;
+const _laserLocalOrigin=new THREE.Vector3(), _laserLocalDir=new THREE.Vector3();
+function punchMesh(mesh, localOrigin, localDir, radius, depth){
+  const geo=mesh.geometry, idxAttr=geo.index;
+  if(!idxAttr) return false;
+  if(idxAttr.count/3>LASER_PUNCH_TRIS) return 'toobig';
+  const posAttr=geo.attributes.position, idx=idxAttr.array;
+  const a=new THREE.Vector3(), b=new THREE.Vector3(), c=new THREE.Vector3(), cen=new THREE.Vector3(), toC=new THREE.Vector3();
+  const r2=radius*radius, kept=[];
+  for(let i=0;i<idx.length;i+=3){
+    a.fromBufferAttribute(posAttr, idx[i]); b.fromBufferAttribute(posAttr, idx[i+1]); c.fromBufferAttribute(posAttr, idx[i+2]);
+    cen.copy(a).add(b).add(c).divideScalar(3);
+    toC.copy(cen).sub(localOrigin);
+    const along=toC.dot(localDir), lateral2=toC.lengthSq()-along*along;
+    const inDrill = along>-1 && along<depth && lateral2<r2;
+    if(!inDrill) kept.push(idx[i], idx[i+1], idx[i+2]);
+  }
+  if(kept.length===idx.length) return false;   // nothing new in range — no rebuild needed
+  geo.setIndex(kept);
+  geo.computeVertexNormals(); geo.computeBoundingSphere();
+  mesh.userData.r=geo.boundingSphere.radius;
+  mesh.userData.center=geo.boundingSphere.center.clone();
+  mesh.userData.punched=true;
+  return true;
+}
+function updateLaser(dt){
+  if(!laserBeam) return;
+  if(!laserOn || explorationMode!=='jetpack'){ laserBeam.visible=false; laserTargetMesh=null; laserHeat=0; return; }
+  laserBeam.visible=true;
+  // firing target is found with the laser's OWN raycast against nearby real meshes — deliberately
+  // not reusing aimHit (the analyze crosshair's GPU pick): that one only refreshes ~20x/sec, skips
+  // updating entirely during Cargo Run, and is scoped to whatever counts as "in reach" for
+  // analyzing — none of which the laser should depend on to fire reliably.
+  let hit=null, hitMesh=null;
+  if(fireHeld){
+    _laserRay.setFromCamera({x:0,y:0}, camera);
+    const nearby=[];
+    const consider=m=>{ if(m.userData.real && isVisibleObject(m) &&
+      playerPos.distanceTo(m.userData.center)-(m.userData.r||0) < LASER_MAX_RANGE) nearby.push(m); };
+    targets.forEach(t=>consider(t.mesh)); decor.forEach(consider);
+    if(nearby.length){ const hits=_laserRay.intersectObjects(nearby, false); if(hits.length){ hit=hits[0]; hitMesh=hit.object; } }
+  } else {
+    hitMesh = aimHit && aimHit.mesh;   // idle beam-length display only — approximate is fine here
+  }
+  const approxDist = hitMesh ? Math.max(2, playerPos.distanceTo(hitMesh.userData.center||hitMesh.position) - (hitMesh.userData.r||0)) : LASER_MAX_RANGE*0.55;
+  const length = Math.min(LASER_MAX_RANGE, hit ? hit.distance : approxDist);
+  laserBeam.scale.y=length; laserBeam.position.z=-length/2;
+
+  const firingOnTarget = fireHeld && hit && hitMesh.userData.real;
+  if(!firingOnTarget || hitMesh!==laserTargetMesh){
+    // (re)starting: freeze the entry point/direction now, so re-raycasting later (which could
+    // now tunnel through an existing hole) is never needed for this drill.
+    laserTargetMesh = firingOnTarget ? hitMesh : null;
+    laserHeat = 0;
+    laserTooBigWarned = false;
+    if(firingOnTarget){
+      hitMesh.worldToLocal(_laserLocalOrigin.copy(hit.point));
+      _laserLocalDir.copy(hit.point).sub(camera.position).transformDirection(hitMesh.matrixWorld.clone().invert()).normalize();
+    }
+  }
+  const heat = firingOnTarget ? Math.min(1, laserHeat+dt/LASER_HEAT_SECONDS) : 0;
+  laserHeat = heat;
+  // beam colour tracks heat: cool blue -> hot white-orange, the "almost through" tell
+  laserBeam.material.color.setHex(!fireHeld ? 0x5588ff : heat>0.85 ? 0xffffff : heat>0.5 ? 0xffaa33 : 0xff3355);
+  if(!firingOnTarget) return;
+  punchTimer-=dt; if(punchTimer>0) return; punchTimer=0.15;
+  // floored, not just scaled down with avatarScale — at jetpack's extreme tininess the unfloored
+  // radius could end up smaller than the mesh's own triangle size, so nothing would ever be in
+  // range to remove (the hole "not working" at all). This still stays comfortably fittable-through
+  // even for a huge avatar, since it only ever scales UP from here, never down past it.
+  const radius=Math.max(1.2, 4*Math.sqrt(avatarScale)), depth=heat*LASER_MAX_DEPTH;
+  const result=punchMesh(hitMesh, _laserLocalOrigin, _laserLocalDir, radius, depth);
+  if(result===true){
+    chime(220+heat*300);
+    // a warm glow spilling out of the cut, once — sells "there's an opening here now" from a
+    // distance, and gives the inside of a hollowed-out organelle something to actually see by.
+    if(!hitMesh.userData.glowLight){
+      const glow=new THREE.PointLight(0xffaa55, 1.1, 26, 2);
+      glow.position.copy(_laserLocalOrigin);
+      hitMesh.add(glow);
+      hitMesh.userData.glowLight=glow;
+    }
+  }
+  else if(result==='toobig' && !laserTooBigWarned){ laserTooBigWarned=true; flash('too complex to cut — try a coarser detail level'); }
+}
+
 // LIVE HOVER HIGHLIGHT (neuroglancer-style): glow whichever mesh the crosshair is over, instantly.
 // We only modulate emissive (colour + intensity) and remember the originals, so it composes with the
 // layer colouring and restores cleanly. Driven by the GPU pick, so it tracks the true surface.
@@ -2086,13 +2914,20 @@ function setCompass(tp){
 const clock = new THREE.Clock();
 function tick(){
   raf = requestAnimationFrame(tick);
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const dt = Math.min(clock.getDelta(), 0.05);   // keep the clock moving even while paused, so
+  // resuming doesn't see one huge dt covering the whole time the menu was up
+  if(uiFree){ renderer.render(scene,camera); return; }   // TAB menu is up — world is fully paused
   scanCooldown = Math.max(0, scanCooldown-dt);
 
   const anyDrive = keys['KeyW']||keys['KeyS']||keys['KeyA']||keys['KeyD'];
   const anyMove = anyDrive||keys['KeyR']||keys['KeyF'];
   if(touring && anyMove) stopTour();     // grabbing the wheel cancels the tour
   if(touring) updateTour(dt);            // auto-drives, sets yaw/pitch + playerPos
+  else{   // chase the cursor's raw target — barely any smoothing, just enough to take the edge
+    // off raw mouse jitter; too much of this read as sluggish/unresponsive look
+    yaw += (yawRaw-yaw)*(1-Math.exp(-40*dt));
+    pitch += (pitchRaw-pitch)*(1-Math.exp(-40*dt));
+  }
 
   // look orientation, decoupled from camera placement so we can do 1st/3rd person
   const qLook = new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch,yaw,0,'YXZ'));
@@ -2100,31 +2935,66 @@ function tick(){
   right.crossVectors(fwd, WORLD_UP).normalize();
 
   if(!touring){
-    const boost=(keys['ShiftLeft']||keys['ShiftRight'])?2.8:1;
+    // NOTE: skate mode only checks boost>1 (a fixed 1.55x, set in updateSkate) — it doesn't scale
+    // with this number, so this only tunes free-flight/jetpack speed. It was 2.8, which made
+    // boosted free flight end up quite a bit faster than boosted surface-skating at the same avatar
+    // size — since jetpack mode now auto-attaches to surfaces often, that mismatch was showing up
+    // as "forward is fast here, slow there" depending on whether you'd been auto-latched. Lower
+    // multiplier brings the two much closer together.
+    const boost=(keys['ShiftLeft']||keys['ShiftRight'])?1.8:1;
     if(skate.active){
-      updateSkate(dt, boost, anyDrive);
+      if(skate.mode==='walk') updateWalk(dt, boost, anyDrive);
+      else updateSkate(dt, boost, anyDrive);
     } else {
-      const accel=(boardAir.active?18:52)*boost*avatarMoveScale();   // gentler thrust; smaller avatars move slower for close inspection
+      // avatarMoveScale() ties speed to avatar size — sensible in flight mode (a modest 0.06-2.6x
+      // range), but jetpack's avatar is now deliberately tiny relative to the mesh (0.01% of the
+      // dataset's own dimension), and the WORLD itself is already normalized to a fixed CELL_R
+      // regardless of dataset — so jetpack speed should be flat, not shrink along with the avatar,
+      // or crossing the same dive takes ages.
+      const accel=(boardAir.active?18:52)*boost*(explorationMode==='jetpack' ? 1 : avatarMoveScale());
       updateBoardAir(dt);
+      const jetpacking = explorationMode==='jetpack' && !boardAir.active;
       if(keys['KeyW']) vel.addScaledVector(fwd, accel*dt);
       if(keys['KeyS']) vel.addScaledVector(fwd,-accel*dt);
       if(keys['KeyD']) vel.addScaledVector(right, accel*dt);
       if(keys['KeyA']) vel.addScaledVector(right,-accel*dt);
-      if(!boardAir.active && keys['KeyR']) vel.addScaledVector(WORLD_UP, accel*dt);
-      if(!boardAir.active && keys['KeyF']) vel.addScaledVector(WORLD_UP,-accel*dt);
+      if(!boardAir.active && !jetpacking && keys['KeyR']) vel.addScaledVector(WORLD_UP, accel*dt);
+      if(!boardAir.active && !jetpacking && keys['KeyF']) vel.addScaledVector(WORLD_UP,-accel*dt);
+      // jetpack mode: gravity always pulls down; SPACE thrusts against it, draining a generous
+      // fuel tank (regenerates while not thrusting) — vertical movement otherwise comes from
+      // that alone, not free R/F flight.
+      // Surface-running reuses the existing skateboard-latch (X).
+      if(jetpacking){
+        vel.addScaledVector(WORLD_DOWN, JET_GRAVITY*dt);
+        const thrusting = keys['Space'] && (JET_INFINITE_FUEL || jetFuel>0);
+        // NOT scaled by avatarMoveScale — gravity above isn't either, so thrust reliably beats
+        // it regardless of avatar size (shrinking the avatar had been quietly weakening thrust
+        // more than gravity, so holding SPACE barely slowed a fall).
+        if(thrusting){ vel.addScaledVector(WORLD_UP, JET_THRUST*dt); if(!JET_INFINITE_FUEL) jetFuel=Math.max(0, jetFuel-dt/JET_FUEL_SECONDS); }
+        else if(!JET_INFINITE_FUEL) jetFuel=Math.min(1, jetFuel+dt/JET_REGEN_SECONDS);
+        if(ui.fuel) ui.fuel.textContent = JET_INFINITE_FUEL ? '∞' : Math.round(jetFuel*100)+'%';
+      }
       // momentum: light damping so the bus glides and coasts to a stop. Frame-rate INDEPENDENT
       // (pow by dt*60) — otherwise a lower framerate applies the per-frame factor fewer times per
       // second and the craft drifts much further.
       vel.multiplyScalar(Math.pow(anyMove ? 0.96 : 0.975, dt*60));
       if(!anyMove && vel.lengthSq() < 0.0004) vel.set(0,0,0);   // settle fully when idle
+      _prevPlayerPos.copy(playerPos);
       playerPos.addScaledVector(vel, dt);
+      if(explorationMode==='jetpack') jetpackCollide(_prevPlayerPos, dt);
       tryBoardAirLand(dt);
+      if(jetpacking) tryJetpackLand(dt);
     }
   }
 
   // soft containment
   const dlen = playerPos.length();
   if(dlen > CELL_R-4){ playerPos.multiplyScalar((CELL_R-4)/dlen); vel.multiplyScalar(0.3); }
+  // jetpack floor: a hard stop at the bottom of the play volume so you can't just fall forever
+  // when there's no mesh underneath you.
+  if(explorationMode==='jetpack' && !skate.active){
+    if(playerPos.y<JET_FLOOR_Y){ playerPos.y=JET_FLOOR_Y; if(vel.y<0) vel.y=0; }
+  }
 
   // place the camera + bus for the active view
   if(thirdPerson && bus){
@@ -2158,8 +3028,8 @@ function tick(){
 
   // life — kept subtle on purpose: a rotating dust field / fast spins read as self-motion
   // (vection) and make a still camera feel like it's drifting or falling.
-  targets.forEach(t=>{ t.mesh.rotation.y += (t.mesh.userData.spin||0)*dt; });
-  decor.forEach(m=>{ m.rotation.y += (m.userData.spin!==undefined?m.userData.spin:0.015)*dt; });
+  targets.forEach(t=>{ t.mesh.rotation.y += (t.mesh.userData.spin||0)*dt; pulseGlow(t.mesh, clock.elapsedTime); });
+  decor.forEach(m=>{ m.rotation.y += (m.userData.spin!==undefined?m.userData.spin:0.015)*dt; pulseGlow(m, clock.elapsedTime); });
   // dust is held still (no ambient rotation) so the world is stable when you stop moving
 
   // objective + scan  (Cargo Run takes over the objective panel while active)
@@ -2187,7 +3057,14 @@ function tick(){
     if(aimHit && aimHit.mesh){                    // neuroglancer-style label: name + real segment id
       const nm=ORG[aimHit.type]?ORG[aimHit.type].name:aimHit.type, ud=aimHit.mesh.userData;
       const id=(ud.real && ud.meta)?ud.meta.seg:ud.uid;
-      ui.hoverlabel.innerHTML=`${nm}<span class="id">${id}</span>`;
+      let extra='';
+      if(ud.props){   // custom-source segment_properties: label/description/tags, if published
+        const p=ud.props;
+        if(p.label) extra += `<span class="propline">${p.label}</span>`;
+        if(p.description) extra += `<span class="propline dim">${p.description}</span>`;
+        if(p.tags && p.tags.length) extra += `<span class="propline dim">${p.tags.join(', ')}</span>`;
+      }
+      ui.hoverlabel.innerHTML=`${nm}<span class="id">${id}</span>${extra}`;
       ui.hoverlabel.classList.remove('hidden');
     } else ui.hoverlabel.classList.add('hidden');
     let candMesh=null, candType=null;
@@ -2217,8 +3094,13 @@ function tick(){
     }
     if(candMesh!==scanMesh){ scanMesh=candMesh; scanProgress=0; }
     const inRange=!!candMesh;
-    ui.cross.classList.toggle('lock', inRange);
-    if(inRange && keys['Space'] && scanCooldown<=0 && !skate.active){
+    // analyze is on SHIFT (not SPACE) so SPACE is free for jetpack thrust without a conflict —
+    // you can hold SHIFT to analyze and click to fire the laser at the same time.
+    const analyzeHeld = keys['ShiftLeft']||keys['ShiftRight'];
+    // custom-source dives have no analyze/objective system (no ORG biology to attach it to) —
+    // hover-for-info (below) still works, SHIFT-to-scan just doesn't apply.
+    ui.cross.classList.toggle('lock', inRange && !spec.custom);
+    if(inRange && analyzeHeld && scanCooldown<=0 && !skate.active && !spec.custom){
       scanProgress = Math.min(1, scanProgress + dt/1.1);
       ui.obj.classList.add('scanning');
       ui.scanbar.style.opacity=1; ui.scanfill.style.width=(scanProgress*100).toFixed(0)+'%';
@@ -2235,10 +3117,10 @@ function tick(){
       if(scanProgress<=0){ ui.scanbar.style.opacity=0; ui.obj.classList.remove('scanning'); }
       const nm=candType?(ORG[candType]?ORG[candType].name:candType):null;
       ui.objHint.innerHTML = nm
-        ? `hold <b style="color:#dfe9f5">SPACE</b> to analyze <b style="color:#9dffb0">${nm}</b>`
+        ? `hold <b style="color:#dfe9f5">SHIFT</b> to analyze <b style="color:#9dffb0">${nm}</b>`
         : skate.active
           ? `${skate.side} boarding <b style="color:#9dffb0">${skateRootName(skate.root)}</b> · <b style="color:#dfe9f5">SPACE/R</b> jump · <b style="color:#dfe9f5">X</b> detach`
-        : `fly up to any organelle, then hold <b style="color:#dfe9f5">SPACE</b> to analyze`;
+        : `fly up to any organelle, then hold <b style="color:#dfe9f5">SHIFT</b> to analyze`;
     }
   }
 
@@ -2259,6 +3141,7 @@ function tick(){
     }
   }
   manageLOD(dt);
+  updateLaser(dt);
   proximityNarrate();
   // debounce the streaming chip so quick refinements don't make it flicker/pop
   lodActiveTime = lodLoading>0 ? lodActiveTime+dt : 0;
@@ -2272,6 +3155,13 @@ function tick(){
 addEventListener('resize', ()=>{ if(!renderer) return;
   camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight); });
+
+// boot straight into a shared link's dive, if the URL names one
+(function(){
+  const h = parseHash();
+  if(h && h.kind==='specimen') startDive(describe(h.id), {skipHistory:true});
+  else if(h && h.kind==='custom') startCustomDive(h.state, {skipHistory:true});
+})();
 
 })();
 </script>
