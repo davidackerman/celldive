@@ -718,18 +718,6 @@ function omat(color, emissive, opacity){
     transparent: opacity!==undefined, opacity: opacity===undefined?1:opacity,
     side: THREE.DoubleSide, flatShading:false });
 }
-// bioluminescent "breathing" glow — a per-mesh-phased sine on emissiveIntensity so organelles
-// read as a little alive rather than uniformly, flatly lit. Phase is randomized once per mesh
-// and cached on it, so different organelles drift in and out of sync with each other. (First cut
-// of this swung +/-0.16 on a base of 0.6 — far too small a fraction of the emissive contribution
-// to ever be visible next to the scene's other lighting; this swings much wider.)
-function pulseGlow(root, t){
-  root.traverse(x=>{ if(x.isMesh && x.material && x.material.emissive){
-    if(x.userData._pulsePhase===undefined) x.userData._pulsePhase=Math.random()*Math.PI*2;
-    x.material.emissiveIntensity = 0.55 + 0.5*Math.sin(t*1.7 + x.userData._pulsePhase);
-  }});
-}
-
 const CELL_R = 100;
 const JET_FLOOR_Y = -(CELL_R-4);   // jetpack's hard floor height, shared by the collision check and its visible plane
 let floorMesh=null;
@@ -2516,6 +2504,30 @@ function tryBoardAirLand(dt){
 // list periodically and reuse it for the in-between frames' swept raycast; the raycast itself
 // still uses this frame's exact prev/current position, so accuracy doesn't suffer, just the
 // "who's worth considering" list lags by up to jetCollideTimer's interval (padded for it below).
+// collision candidates deliberately don't use skateRoots()'s landability size floor — something
+// too small to stand on should still be solid enough to not clip through.
+function collisionRoots(){
+  const seen=new Set(), out=[];
+  const add=m=>{
+    if(!m || seen.has(m) || !isVisibleObject(m)) return;
+    if((m.userData.r||m.userData.reachR||0) < 0.05) return;
+    seen.add(m); out.push(m);
+  };
+  targets.forEach(t=>add(t.mesh));
+  decor.forEach(add);
+  return out;
+}
+// only let you through near an ACTUAL cut opening, not anywhere within the mesh's whole bounding
+// sphere — for a non-spherical/irregular real mesh, "inside the bounding sphere" can be well
+// short of the real surface in other directions, which was disabling collision for the entire
+// mesh (letting you clip through solid, unpunched geometry) the moment it had a hole anywhere.
+function nearAnyHole(mesh, worldPos){
+  const holes=mesh.userData.punchHoles;
+  if(!holes || !holes.length) return false;
+  const local=mesh.worldToLocal(worldPos.clone());
+  for(const h of holes) if(local.distanceTo(h.origin) < h.radius+2) return true;
+  return false;
+}
 let jetCollideRoots=[], jetCollideTimer=0;
 function jetpackCollide(prevPos, dt){
   const delta=_sk3.copy(playerPos).sub(prevPos), moveLen=delta.length();
@@ -2530,11 +2542,11 @@ function jetpackCollide(prevPos, dt){
     // more often and pad the radius more generously.
     jetCollideTimer=0.1;
     const probeDist=40;
-    jetCollideRoots=skateRoots().filter(m=>{
+    jetCollideRoots=collisionRoots().filter(m=>{
       const c=skateRootCenter(m), r=m.userData.r||0;
-      const d=prevPos.distanceTo(c);
-      if(m.userData.punched && d<r) return false;   // already inside via a hole — don't block re-entry/exit
-      return d-r < probeDist;
+      if(prevPos.distanceTo(c)-r >= probeDist) return false;
+      if(m.userData.punched && nearAnyHole(m, prevPos)) return false;
+      return true;
     });
   }
   if(!jetCollideRoots.length) return;
@@ -2565,8 +2577,11 @@ function tryJetpackLand(dt){
     // once you're inside a mesh you've cut a hole into, don't auto-land on its own inner wall —
     // the cavity is usually barely bigger than the hole itself, so surface-tracking there reads
     // as "movement is broken"/weird gravity. Free-flying inside (plain jetpack gravity+thrust,
-    // no surface snap) is simpler and is what "falling in" should actually feel like.
-    if(m.userData.punched && d < r) return false;
+    // no surface snap) is simpler and is what "falling in" should actually feel like. Checked
+    // against the actual hole location, not the whole bounding sphere (see nearAnyHole) — a
+    // coarse d<r check here disabled landing anywhere near a large/irregular mesh's centroid
+    // the instant it had a hole anywhere, not just near the opening itself.
+    if(m.userData.punched && d < r && nearAnyHole(m, playerPos)) return false;
     return d - r < probeDist;
   });
   if(!roots.length) return;
@@ -2788,6 +2803,10 @@ function punchMesh(mesh, localOrigin, localDir, radius, depth){
   mesh.userData.r=geo.boundingSphere.radius;
   mesh.userData.center=geo.boundingSphere.center.clone();
   mesh.userData.punched=true;
+  // record exactly where this hole is (local space) — collision needs to let you through only
+  // near an actual opening, not anywhere within the mesh's whole bounding sphere (which for a
+  // non-spherical/irregular real mesh can extend well past where the real surface is).
+  (mesh.userData.punchHoles=mesh.userData.punchHoles||[]).push({origin:localOrigin.clone(), radius});
   return true;
 }
 function updateLaser(dt){
@@ -3028,8 +3047,8 @@ function tick(){
 
   // life — kept subtle on purpose: a rotating dust field / fast spins read as self-motion
   // (vection) and make a still camera feel like it's drifting or falling.
-  targets.forEach(t=>{ t.mesh.rotation.y += (t.mesh.userData.spin||0)*dt; pulseGlow(t.mesh, clock.elapsedTime); });
-  decor.forEach(m=>{ m.rotation.y += (m.userData.spin!==undefined?m.userData.spin:0.015)*dt; pulseGlow(m, clock.elapsedTime); });
+  targets.forEach(t=>{ t.mesh.rotation.y += (t.mesh.userData.spin||0)*dt; });
+  decor.forEach(m=>{ m.rotation.y += (m.userData.spin!==undefined?m.userData.spin:0.015)*dt; });
   // dust is held still (no ambient rotation) so the world is stable when you stop moving
 
   // objective + scan  (Cargo Run takes over the objective panel while active)
