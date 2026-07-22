@@ -1267,7 +1267,12 @@ async function loadRealOrganelles(id, onProgress){
     if(p[i+1]<mn[1])mn[1]=p[i+1]; if(p[i+1]>mx[1])mx[1]=p[i+1];
     if(p[i+2]<mn[2])mn[2]=p[i+2]; if(p[i+2]>mx[2])mx[2]=p[i+2]; }}
   const ctr=[(mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2];
-  const ext=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1;
+  // the box's full diagonal, not just its single largest axis — using only the dominant axis
+  // guarantees THAT axis fits inside the membrane sphere but says nothing about the other two,
+  // so a roughly cubic/isotropic bounding box (not a long thin one) put its corners well outside
+  // CELL_R even though no single axis looked oversized — meshes near those corners got clipped by
+  // the membrane. Fitting the diagonal instead bounds every point in the box, not just one axis.
+  const ext=Math.hypot(mx[0]-mn[0], mx[1]-mn[1], mx[2]-mn[2])||1;
   const fit=(CELL_R*1.7)/ext;
   // per-axis extents in game units, for autoAvatarScale() — "1% of the dataset's smallest
   // dimension" needs the actual loaded bounding box, not just the single max-axis fit scalar.
@@ -1456,7 +1461,12 @@ async function loadCustomOrganelles(state, onProgress){
     if(p[i+1]<mn[1])mn[1]=p[i+1]; if(p[i+1]>mx[1])mx[1]=p[i+1];
     if(p[i+2]<mn[2])mn[2]=p[i+2]; if(p[i+2]>mx[2])mx[2]=p[i+2]; }}
   const ctr=[(mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2];
-  const ext=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2])||1;
+  // the box's full diagonal, not just its single largest axis — using only the dominant axis
+  // guarantees THAT axis fits inside the membrane sphere but says nothing about the other two,
+  // so a roughly cubic/isotropic bounding box (not a long thin one) put its corners well outside
+  // CELL_R even though no single axis looked oversized — meshes near those corners got clipped by
+  // the membrane. Fitting the diagonal instead bounds every point in the box, not just one axis.
+  const ext=Math.hypot(mx[0]-mn[0], mx[1]-mn[1], mx[2]-mn[2])||1;
   const fit=(CELL_R*1.7)/ext;
   // per-axis extents in game units, for autoAvatarScale() — "1% of the dataset's smallest
   // dimension" needs the actual loaded bounding box, not just the single max-axis fit scalar.
