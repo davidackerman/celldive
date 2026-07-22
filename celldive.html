@@ -205,6 +205,10 @@
   @keyframes startPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
   #menuSub{color:var(--dim);font-size:11px;letter-spacing:.03em;margin:-6px 0 14px}
   #menuSub b{color:var(--ink)}
+  #menuFoot{margin-top:16px;padding-top:12px;border-top:1px solid var(--line);
+    font-size:10.5px;letter-spacing:.03em;text-align:right}
+  #menuFoot a{color:var(--dim);text-decoration:none}
+  #menuFoot a:hover{color:var(--accent)}
   #tools{display:flex;flex-direction:column;gap:11px;max-width:460px}
   .toolGroupLabel{color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.16em}
   .toolGroupRow{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-start;margin-top:5px}
@@ -360,6 +364,7 @@
         <div id="resRow"><span>detail</span><input type="range" id="resSlider" min="1" max="6" value="6"><span id="resVal">full</span></div>
         <div id="layersBody"></div>
       </div>
+      <div id="menuFoot"><a href="https://github.com/davidackerman/celldive" target="_blank" rel="noopener">↗ source on GitHub</a></div>
     </div>
   </div>
   <div id="tabHint">press <b>TAB</b> for menu</div>
