@@ -105,9 +105,9 @@
     pointer-events:none}
   #scanbar > i{display:block;height:100%;width:0;background:var(--warn)}
 
-  #help{left:50%;bottom:16px;transform:translateX(-50%);text-align:center;color:var(--dim);
+  #help{left:50%;bottom:16px;transform:translateX(-50%);text-align:center;color:var(--ink);
     font-size:11px;letter-spacing:.03em;white-space:nowrap}
-  #help b{color:var(--ink);font-weight:600}
+  #help b{color:var(--accent);font-weight:600}
 
   #cross{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;
     pointer-events:none;opacity:.9;border:1.5px solid rgba(233,242,255,.5);border-radius:50%;
@@ -196,9 +196,18 @@
     font-size:12px;letter-spacing:.14em;color:var(--accent);font-weight:700;margin-bottom:14px}
   #menuHead #menuClose{color:var(--dim);font-weight:400;letter-spacing:.04em;cursor:pointer;font-size:11px}
   #menuHead #menuClose:hover{color:var(--ink)}
+  /* first-load-only "start diving" state — needs to read as a real button, not the small dim
+     "resume" text it doubles as afterward, or a new player has no obvious next action. */
+  #menuHead #menuClose.start{color:var(--bg);background:var(--accent);font-weight:700;
+    font-size:14px;padding:8px 18px;border-radius:7px;letter-spacing:.03em;
+    animation:startPulse 1.6s ease-in-out infinite}
+  #menuHead #menuClose.start:hover{filter:brightness(1.08)}
+  @keyframes startPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
   #menuSub{color:var(--dim);font-size:11px;letter-spacing:.03em;margin:-6px 0 14px}
   #menuSub b{color:var(--ink)}
-  #tools{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-start;max-width:460px}
+  #tools{display:flex;flex-direction:column;gap:11px;max-width:460px}
+  .toolGroupLabel{color:var(--accent);font-size:10px;text-transform:uppercase;letter-spacing:.16em}
+  .toolGroupRow{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-start;margin-top:5px}
   #tabHint{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:8;
     font-size:11px;letter-spacing:.04em;color:var(--warn);background:rgba(5,7,13,.6);
     border:1px solid var(--line);padding:4px 10px;backdrop-filter:blur(6px);white-space:nowrap}
@@ -271,6 +280,7 @@
     <div class="sub" id="specWho">—</div>
     <div class="sub" id="specSrc" style="color:#7fe7ff;margin-top:3px">—</div>
     <div class="stats">
+      <div class="row"><span class="k">fps</span><span class="v" id="fps">—</span></div>
       <div class="row"><span class="k">depth</span><span class="v" id="depth">—</span></div>
       <div class="row"><span class="k">speed</span><span class="v" id="speed">—</span></div>
       <div class="row hidden" id="fuelRow"><span class="k">fuel</span><span class="v" id="fuel">100%</span></div>
@@ -298,19 +308,52 @@
       <div id="menuHead">MENU <span id="menuClose">✕ resume (TAB)</span></div>
       <div id="menuSub">click outside or press <b>TAB</b> to close · <b>ESC</b> anytime releases the cursor</div>
       <div id="tools">
-        <button class="tool" id="tCargo">🎯 cargo run</button>
-        <button class="tool" id="tNarr">🔊 narration</button>
-        <button class="tool" id="tTour">🧭 take the tour</button>
-        <button class="tool" id="tAmb">🎵 ambience</button>
-        <button class="tool on" id="tColor">🎨 unique colors</button>
-        <button class="tool" id="tShadow">☀️ shadows</button>
-        <button class="tool" id="tView">🚌 bus view</button>
-        <button class="tool" id="tMode">🚀 jetpack mode</button>
-        <button class="tool" id="tSkate">🛹 skateboard</button>
-        <button class="tool" id="tAvatar">🚌 bus</button>
-        <button class="tool" id="tShrink">- size</button>
-        <button class="tool" id="tGrow">+ size</button>
-        <button class="tool hidden" id="tLaser">🔺 laser</button>
+        <div class="toolGroup">
+          <div class="toolGroupLabel">activities</div>
+          <div class="toolGroupRow">
+            <button class="tool" id="tCargo">🎯 cargo run</button>
+            <button class="tool" id="tTour">🧭 take the tour</button>
+          </div>
+        </div>
+        <div class="toolGroup">
+          <div class="toolGroupLabel">movement</div>
+          <div class="toolGroupRow">
+            <button class="tool" id="tMode">🚀 jetpack mode</button>
+            <button class="tool" id="tSurface">🛹 skateboard</button>
+            <button class="tool" id="tShrink">- size</button>
+            <button class="tool" id="tGrow">+ size</button>
+          </div>
+        </div>
+        <div class="toolGroup">
+          <div class="toolGroupLabel">view &amp; avatar</div>
+          <div class="toolGroupRow">
+            <button class="tool" id="tView">🚌 bus view</button>
+            <button class="tool" id="tAvatar">🚌 bus</button>
+          </div>
+        </div>
+        <div class="toolGroup">
+          <div class="toolGroupLabel">visuals</div>
+          <div class="toolGroupRow">
+            <button class="tool on" id="tColor">🎨 unique colors</button>
+            <button class="tool" id="tShadow">☀️ shadows</button>
+            <button class="tool" id="tDust">✨ dust</button>
+            <button class="tool" id="tFlashlight">🔦 flashlight</button>
+            <button class="tool" id="tDynLOD" title="refine mesh detail as you approach — off by default, costs real hitches for little visible gain">🔍 refine on approach</button>
+          </div>
+        </div>
+        <div class="toolGroup">
+          <div class="toolGroupLabel">audio</div>
+          <div class="toolGroupRow">
+            <button class="tool" id="tNarr">🔊 narration</button>
+            <button class="tool" id="tAmb">🎵 ambience</button>
+          </div>
+        </div>
+        <div class="toolGroup">
+          <div class="toolGroupLabel">tools</div>
+          <div class="toolGroupRow">
+            <button class="tool hidden" id="tLaser">🔺 laser</button>
+          </div>
+        </div>
       </div>
       <div id="menuLayers">
         <div class="lhead">layers <span id="lhint">click to toggle</span></div>
@@ -325,7 +368,7 @@
   <div id="help" class="panel">
     <span id="helpAlways"><b>mouse</b> look (<b>ESC</b> to release) · <b>TAB</b> menu/cursor · <b>Shift</b> boost/analyze · <b>scroll</b> torch brightness · <b>K</b> avatar · <b>[</b>/<b>]</b> size · <b>V</b> view</span>
     <span id="helpFly">&nbsp;|&nbsp; <b>WASD</b> fly · <b>R/F</b> up/down · <b>X</b> board a surface</span>
-    <span id="helpSkate" class="hidden">&nbsp;|&nbsp; <b>W/S</b> thrust/brake · <b>A/D</b> lean carve · <b>SPACE/R</b> jump · <b>X</b> detach</span>
+    <span id="helpBoard" class="hidden">&nbsp;|&nbsp; <b>W/S</b> thrust/brake · <b>A/D</b> lean carve · <b>SPACE/R</b> jump · <b>X</b> detach</span>
     <span id="helpJetpack" class="hidden">&nbsp;|&nbsp; <b>WASD</b> move · <b>SPACE</b> jetpack thrust (limited fuel) · <b>click</b> laser · <b>X</b> latch onto a surface to run on it</span>
   </div>
 
@@ -345,6 +388,7 @@
 <div id="loading" class="hidden"><div class="ring"></div><span>descending into specimen…</span></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three-mesh-bvh@0.4.3/build/index.umd.cjs"></script>
 <script src="https://www.gstatic.com/draco/v1/decoders/draco_wasm_wrapper.js"></script>
 <script>
 (function(){
@@ -676,12 +720,24 @@ window.addEventListener('popstate', ()=>{
 //  THE DIVE  (Three.js flythrough, built per specimen)
 // ===================================================================
 const THREE = window.THREE;
+// three-mesh-bvh: plain Three.js raycasting checks every triangle in a mesh one at a time —
+// fine for a few thousand, but real organelle/segment meshes routinely run into the hundreds of
+// thousands, and celldive does several raycasts a frame against them while walking/landing
+// (surface tracking, jetpack collision) plus the laser's aim raycast. This patches
+// Mesh.raycast to use a BVH (bounding volume hierarchy) instead — O(log n) tree descent rather
+// than O(n) triangle checks. computeBoundsTree() is called wherever real-mesh geometry is built
+// (buildLODGeometry) and refreshed after punchMesh edits a geometry's index.
+if(window.MeshBVHLib){
+  THREE.BufferGeometry.prototype.computeBoundsTree = MeshBVHLib.computeBoundsTree;
+  THREE.BufferGeometry.prototype.disposeBoundsTree = MeshBVHLib.disposeBoundsTree;
+  THREE.Mesh.prototype.raycast = MeshBVHLib.acceleratedRaycast;
+}
 const gameEl = document.getElementById('game');
 const appEl = document.getElementById('app');
 const loadingEl = document.getElementById('loading');
 
 let renderer, scene, camera, headlamp, raf=0;
-let spot=null, spotTarget=null, spotIntensity=2.6;   // controllable forward torch
+let spot=null, spotTarget=null, spotIntensity=0, spotLastOn=2.6;   // controllable forward torch — off by default
 let shadowLight=null;                                // scene key light that casts object-on-object shadows
 let bus=null, thirdPerson=false, busRoll=0;          // the visible avatar + external view
 let avatarMode="bus", avatarScale=1;
@@ -694,6 +750,13 @@ const laserBolts=[]; let boltTimer=0;   // travelling shot pulses, separate from
 const playerPos = new THREE.Vector3();               // logical position (camera rides this in 1st person)
 const layerMeshes = {};                              // organelle type -> [meshes], for the ng-style layer panel
 let uniqueColors=true, shadowsOn=false;             // ng-style per-segment colours (on by default); dynamic shadows
+let dustOn=false;   // floating parallax dust motes — off by default (read as "random fake spots" against real meshes)
+// off by default: every runtime hitch traced this session (BVH construction, draco decode
+// bursts, concurrent swap pile-ups) came from THIS system refining meshes as you approach them,
+// for a visual payoff that kept measuring out as imperceptible (e.g. a nucleus instance goes
+// ~4000->~20000 triangles refining to finest — looks identical at any real viewing distance).
+// Meshes load once at the detail slider's chosen LOD and stay there unless this is switched on.
+let dynamicLOD=false;
 let narrationOn=false, touring=false, tourIdx=0, tourDwell=0;   // Ms. Frizzle narration + guided tour (off by default)
 let segCounter=0;                                    // gives each mesh a stable id for unique colouring
 let ambienceOn=false, audioCtx=null, audioMaster=null, audioPadLP=null, heartTimer=0, pingTimer=0;  // generative cell soundscape
@@ -702,9 +765,9 @@ let marker=null, markerPulse=0;                       // 3D direction marker at 
 let targets=[], decor=[], dust;
 let spec=null;
 const raycaster = new THREE.Raycaster();
-const skate = {active:false, root:null, type:null, side:"outside", mode:"board", normal:new THREE.Vector3(0,1,0), forward:new THREE.Vector3(0,0,-1), lastPoint:new THREE.Vector3(), gravity:new THREE.Vector3(0,-1,0), lean:0, grace:0};
+const surface = {active:false, root:null, type:null, side:"outside", mode:"board", normal:new THREE.Vector3(0,1,0), forward:new THREE.Vector3(0,0,-1), lastPoint:new THREE.Vector3(), gravity:new THREE.Vector3(0,-1,0), lean:0, grace:0};
 const boardAir = {active:false, root:null, side:"outside", mode:"board", normal:new THREE.Vector3(0,1,0), gravity:new THREE.Vector3(0,-1,0), age:0, cooldown:0};
-const SKATE_MIN_R=7, SKATE_LATCH_DIST=42, SKATE_HOVER=3.1, SKATE_PROBE=18;
+const SURFACE_MIN_R=7, SURFACE_LATCH_DIST=42, SURFACE_HOVER=3.1, SURFACE_PROBE=18;
 const AVATAR_MIN_SCALE=0.005, AVATAR_MAX_SCALE=2.6, AVATAR_SCALE_RATIO=1.18;
 
 function fbm(x,y,z){
@@ -734,11 +797,57 @@ function blob(radius, detail, amp, freq, mat, stretch, rnd){
   if(stretch) m.scale.set(stretch.x,stretch.y,stretch.z);
   return m;
 }
-function omat(color, emissive, opacity){
-  return new THREE.MeshStandardMaterial({
+function omat(color, emissive, opacity, silhouettePower){
+  const op = opacity===undefined?1:opacity;
+  const hasSilhouette = silhouettePower>0;
+  const mat = new THREE.MeshStandardMaterial({
     color, emissive, emissiveIntensity:0.6, roughness:0.5, metalness:0.0,
-    transparent: opacity!==undefined, opacity: opacity===undefined?1:opacity,
+    transparent: opacity!==undefined, opacity: op,
+    // truly translucent (low-alpha, OR silhouette-shaded) DoubleSide meshes shouldn't write
+    // depth: a folded/non-convex surface crosses front+back many times along one view ray, and
+    // with depthWrite on, each crossing blends on top of the last uncorrected, compounding fast
+    // toward opaque well before the nominal alpha would suggest. Near-opaque meshes (the common
+    // case) keep depthWrite so occlusion between DIFFERENT objects still sorts correctly.
+    depthWrite: op>=0.9 && !hasSilhouette,
     side: THREE.DoubleSide, flatShading:false });
+  // neuroglancer's "silhouette rendering" (a pasted link's meshSilhouetteRendering): ported
+  // line-for-line from mesh/frontend.ts's MeshShaderManager, which does
+  // `vColor *= pow(1.0 - absCosAngle, uSilhouettePower)` on the WHOLE vec4 — alpha included,
+  // not just rgb — where absCosAngle = |dot(normal, lightDir)| and ng's per-view light direction
+  // is itself camera-space (a "headlamp"), equivalent to our view direction here. That's the
+  // part a color-only version misses: ng's MeshLayer.isTransparent is true whenever
+  // silhouetteRendering>0 regardless of objectAlpha, specifically because fading alpha (not
+  // just brightness) toward 0 on camera-facing surfaces is what makes the mesh actually read as
+  // hollowed-out/see-through at its center while staying solid at the rim, not just dark there.
+  // Pinned to r128 (celldive's exact Three.js build): vNormal/vViewPosition are already
+  // unconditional view-space varyings in the standard fragment shader, so no custom varying
+  // is needed — just multiply the already-lit gl_FragColor right where it's assembled.
+  if(hasSilhouette){
+    mat.onBeforeCompile = shader=>{
+      shader.uniforms.uSilhouettePower = {value: silhouettePower};
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', 'uniform float uSilhouettePower;\n#include <common>')
+        .replace('gl_FragColor = vec4( outgoingLight, diffuseColor.a );',
+          'gl_FragColor = vec4( outgoingLight, diffuseColor.a );\n'+
+          'gl_FragColor *= pow( clamp( 1.0 - abs( dot( normalize( vNormal ), normalize( vViewPosition ) ) ), 0.0, 1.0 ), uSilhouettePower );');
+    };
+  }
+  return mat;
+}
+// Three.js sorts transparent objects by camera-relative depth every frame (correct, and needed
+// so a mesh far from camera doesn't paint over one that's actually closer — see the
+// buildLODGeometry/mesh.position fix above). For a depthWrite:false mesh (translucent alpha, or
+// any silhouette — see omat above), draw order isn't just a nicety: alpha blending is order-
+// dependent, so if two overlapping translucent meshes' RELATIVE order flips as the camera moves
+// (verified directly: a shell and its contents swap which paints first depending on viewpoint),
+// the blended result visibly changes from moment to moment — "sometimes becoming transparent for
+// no reason" as you fly around, not tied to any specific trigger. depthWrite:true meshes don't
+// need this: per-pixel depth testing already gives correct occlusion regardless of paint order.
+// Fix: give translucent meshes a FIXED order instead of a camera-dependent one — bigger (usually
+// outer/enclosing) ones paint last, so a shell consistently overlays its contents rather than
+// flickering between "shell on top" and "contents on top" as you move.
+function stabilizeTransparentOrder(mesh, radius){
+  if(!mesh.material.depthWrite) mesh.renderOrder = Math.round(radius);
 }
 const CELL_R = 100;
 const JET_FLOOR_Y = -(CELL_R-4);   // jetpack's hard floor height, shared by the collision check and its visible plane
@@ -969,7 +1078,7 @@ function lodBytes(man, L){ return man.lods[L].frags.reduce((s,f)=>s+f.size,0); }
 // slider allows and never over the per-LOD byte budget. Used as the DEFAULT quality a mesh loads
 // at (and rests at when far), instead of the blocky coarsest level.
 function mediumLOD(man, coarse){
-  let L=Math.max(resCap, Math.min(coarse, Math.floor(coarse/2)));
+  let L=Math.max(Math.round(coarse*resCap), Math.min(coarse, Math.floor(coarse/2)));
   while(L<coarse && lodBytes(man,L)===0) L++;          // land on a populated level (empties cluster coarse)
   while(L<coarse && lodBytes(man,L)>LOD_BUDGET) L++;   // don't exceed the byte budget
   return L;
@@ -1040,17 +1149,55 @@ async function pool(items, n, fn){
 // ---- dynamic LOD state (neuroglancer-style detail-on-approach) ----
 let currentFit=null;                 // {ctr:[x,y,z], fit} shared nm->game transform for the dive
 let lodLoading=0, lodTimer=0, lodActiveTime=0;
-let resCap=0;                        // finest LOD index the detail slider permits (0 = full res)
+// detail slider position, as a FRACTION (0 = full res, 1 = force each mesh's own true coarsest
+// level) rather than an absolute LOD index — a fixed index range didn't reach "actually coarsest"
+// on meshes with more LOD levels than the slider's range, and did nothing at all on meshes with
+// fewer. Scaled per-mesh (against that mesh's own coarsestLOD) in mediumLOD/pickLOD instead.
+let resCap=0;
 let meshTotalAvail=0;                 // total real segments available across loaded layers (for "N of M")
-const LOD_MAXCONC=4, LOD_BUDGET=6_000_000;   // generous detail budget; cap so the finest never buries the GPU
+// LOD_MAXCONC bounds concurrent swaps, but "concurrent" only limits network fetches — draco
+// decoding (measured directly: 4-66ms per mesh, real end-to-end fetch+decode numbers ran up to
+// 180k triangles) happens synchronously on the main thread once each fetch resolves, and with 4
+// allowed at once, several can land in the same instant and stack their decode cost — right when
+// manageLOD first runs after clicking "start diving" (every nearby mesh gets evaluated at once,
+// since nothing ran while the menu was up) and again each time you approach something new. Lower
+// concurrency spreads that cost over slightly more real time instead of letting it pile up.
+const LOD_MAXCONC=2, LOD_BUDGET=6_000_000;   // generous detail budget; cap so the finest never buries the GPU
 
 function buildLODGeometry(posNm, idx){
   const {ctr, fit}=currentFit;
+  // find this mesh's own local center BEFORE filling the position buffer, so it can be baked
+  // straight out in the same pass — Three.js sorts transparent objects by each object's Object3D
+  // position (matrixWorld translation), not its geometry. Every real mesh used to leave
+  // mesh.position at the origin and bake its true world location entirely into vertex data
+  // instead, so that sort key was IDENTICAL (meaningless) for every real mesh in the scene —
+  // which is what showed up as translucent/silhouette meshes sometimes drawing in front of
+  // things they should be behind. Callers must set mesh.position from the returned offset.
+  let mn=[Infinity,Infinity,Infinity], mx=[-Infinity,-Infinity,-Infinity];
+  for(let i=0;i<posNm.length;i+=3) for(let ax=0;ax<3;ax++){
+    const v=(posNm[i+ax]-ctr[ax])*fit;
+    if(v<mn[ax]) mn[ax]=v; if(v>mx[ax]) mx[ax]=v;
+  }
+  const offset=new THREE.Vector3((mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2);
   const p=new Float32Array(posNm.length);
-  for(let i=0;i<posNm.length;i+=3){ p[i]=(posNm[i]-ctr[0])*fit; p[i+1]=(posNm[i+1]-ctr[1])*fit; p[i+2]=(posNm[i+2]-ctr[2])*fit; }
+  for(let i=0;i<posNm.length;i+=3){
+    p[i]=(posNm[i]-ctr[0])*fit-offset.x; p[i+1]=(posNm[i+1]-ctr[1])*fit-offset.y; p[i+2]=(posNm[i+2]-ctr[2])*fit-offset.z;
+  }
   const g=new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(p,3));
   g.setIndex(idx); g.computeVertexNormals(); g.computeBoundingSphere();
+  // every real-mesh geometry goes through here (initial load + every LOD swap) — measured
+  // directly: computeBoundsTree() alone costs 70-300ms+ on the organelle sizes this game
+  // actually sees (200k-1M+ triangles), and doing it synchronously here meant a real hitch on
+  // EVERY LOD refinement — including the burst of them right as manageLOD first kicks in after
+  // hitting "start", and again each time you get close enough to something for it to refine
+  // further. Deferred to its own macrotask instead of blocking whatever's building this geometry
+  // right now: acceleratedRaycast already falls back to plain (slower but fully correct)
+  // raycasting whenever geometry.boundsTree is null (verified: identical hit results either
+  // way), so the mesh just raycasts normally for one moment and gets fast again the instant the
+  // deferred build lands, rather than freezing the frame that happens to trigger it.
+  if(g.computeBoundsTree) setTimeout(()=>g.computeBoundsTree({maxLeafTris:40}), 0);
+  g.userData.centerOffset=offset;
   return g;
 }
 
@@ -1132,8 +1279,11 @@ async function loadRealOrganelles(id, onProgress){
     const g=buildLODGeometry(o.posNm, o.idx);
     const od=ORG[o.type];
     const mesh=new THREE.Mesh(g, omat(od.color, od.emissive, o.type==="er"?0.55:0.96));
+    mesh.position.copy(g.userData.centerOffset);   // geometry is now mesh-local; this restores its real world position (see buildLODGeometry)
+    mesh.updateMatrixWorld(true);
+    stabilizeTransparentOrder(mesh, g.boundingSphere.radius);
     mesh.userData.r = g.boundingSphere.radius;
-    mesh.userData.center = g.boundingSphere.center.clone();  // world-space (mesh stays at origin)
+    mesh.userData.center = mesh.position.clone().add(g.boundingSphere.center);   // world-space
     mesh.userData.real = true;
     mesh.userData.meta = o.meta;        // {base,seg,info,man,_L0}
     mesh.userData.lod = o.meta._Linit;  // current level of detail (starts at medium)
@@ -1148,8 +1298,12 @@ async function loadRealOrganelles(id, onProgress){
 //  exactly the segments already selected in the pasted state (Feature 2).
 // ===================================================================
 // precomputed:// / gs:// / s3:// / http(s):// -> a plain https base URL, no trailing slash.
+// also strips a trailing "|<format>:" (e.g. "...|neuroglancer-precomputed:") — neuroglancer's
+// explicit-format kvstore syntax, which forces format-detection rather than naming a real path.
 function resolveSourceUrl(src){
   let url = typeof src==='string' ? src : (src && src.url) || '';
+  const pipeIdx = url.indexOf('|');
+  if(pipeIdx>=0) url = url.slice(0,pipeIdx);
   url = url.replace(/^precomputed:\/\//,'');
   if(url.startsWith('gs://')) url = 'https://storage.googleapis.com/'+url.slice(5);
   else if(url.startsWith('s3://')){
@@ -1158,6 +1312,26 @@ function resolveSourceUrl(src){
     url = `https://${bucket}.s3.amazonaws.com/${path}`;
   }
   return url.replace(/\/+$/,'');
+}
+// a segmentation layer's source can be a single source, or (common when the mesh is published
+// separately from the label volume, e.g. CellMap's "new_meshes" layout) an ARRAY of sources —
+// try each candidate in turn and use whichever one's `info` actually describes a mesh: either
+// a standalone mesh source (@type neuroglancer_multilod_draco / neuroglancer_legacy_mesh, so
+// its own base IS the mesh dir) or a segmentation source with a linked `mesh` subdirectory.
+// Non-mesh candidates (the raw label volume, a skeleton source, etc.) are skipped, not fatal.
+async function resolveMeshSource(source){
+  const candidates = Array.isArray(source) ? source : [source];
+  for(const cand of candidates){
+    const base = resolveSourceUrl(cand);
+    if(!base) continue;
+    let info;
+    try{ info = await fetchJson(`${base}/info`); }catch(e){ continue; }
+    if(!info) continue;
+    if(info['@type']==='neuroglancer_multilod_draco' || info['@type']==='neuroglancer_legacy_mesh')
+      return {base, info, meshBase: base};
+    if(info.mesh) return {base, info, meshBase: `${base}/${info.mesh}`};
+  }
+  return null;
 }
 async function fetchJson(url){
   const r = await fetch(url,{cache:"force-cache"});
@@ -1229,18 +1403,19 @@ async function loadCustomOrganelles(state, onProgress){
 
   const layerCtx=[];
   for(const l of layers){
-    const base = resolveSourceUrl(l.source);
-    if(!base) continue;
-    let info;
-    try{ info = await fetchJson(`${base}/info`); }catch(e){ continue; }
-    if(!info || !info.mesh) continue;   // not a segmentation source, or no published meshes
+    const resolved = await resolveMeshSource(l.source);
+    if(!resolved) continue;   // no candidate source in this layer actually publishes a mesh
+    const { base, info, meshBase } = resolved;
     const segIds = l.segments.map(String).filter(s=>/^\d+$/.test(s));
     if(!segIds.length) continue;
     const props = info.segment_properties ? await fetchSegmentProperties(base, info.segment_properties) : null;
     // objectAlpha is neuroglancer's own mesh-opacity field for this layer; segmentColors/
     // segmentDefaultColor/colorSeed/saturation (resolved per-segment below) are its color controls.
     const alpha = typeof l.objectAlpha==='number' ? l.objectAlpha : 1;
-    layerCtx.push({ name: l.name || 'segmentation', meshBase: `${base}/${info.mesh}`, segIds, props, layer:l, alpha });
+    // meshSilhouetteRendering is a SEPARATE ng feature from objectAlpha — a rim-light shader
+    // strength, not real transparency (see omat()) — a layer can have either, neither, or both.
+    const silhouette = typeof l.meshSilhouetteRendering==='number' ? l.meshSilhouetteRendering : 0;
+    layerCtx.push({ name: l.name || 'segmentation', meshBase, segIds, props, layer:l, alpha, silhouette });
   }
   if(!layerCtx.length) return null;
 
@@ -1270,7 +1445,7 @@ async function loadCustomOrganelles(state, onProgress){
     onProgress(`decoding meshes… ${++done}/${jobs.length}`);
     if(!r) return null;
     return {type:j.lc.name, posNm:r.posNm, idx:r.idx, meta, props: j.lc.props && j.lc.props[j.seg],
-      color: resolveSegmentColor(j.lc.layer, j.seg), alpha: j.lc.alpha};
+      color: resolveSegmentColor(j.lc.layer, j.seg), alpha: j.lc.alpha, silhouette: j.lc.silhouette};
   });
   const good=loaded.filter(Boolean);
   if(!good.length) return null;
@@ -1291,9 +1466,12 @@ async function loadCustomOrganelles(state, onProgress){
   const entries=[];
   for(const o of good){
     const g=buildLODGeometry(o.posNm, o.idx);
-    const mesh=new THREE.Mesh(g, omat(o.color, o.color.clone().multiplyScalar(0.22), o.alpha));
+    const mesh=new THREE.Mesh(g, omat(o.color, o.color.clone().multiplyScalar(0.22), o.alpha, o.silhouette));
+    mesh.position.copy(g.userData.centerOffset);   // geometry is now mesh-local; this restores its real world position (see buildLODGeometry)
+    mesh.updateMatrixWorld(true);
+    stabilizeTransparentOrder(mesh, g.boundingSphere.radius);
     mesh.userData.r = g.boundingSphere.radius;
-    mesh.userData.center = g.boundingSphere.center.clone();
+    mesh.userData.center = mesh.position.clone().add(g.boundingSphere.center);   // world-space
     mesh.userData.real = true;
     mesh.userData.meta = o.meta;
     mesh.userData.lod = o.meta._Linit;
@@ -1307,13 +1485,32 @@ async function loadCustomOrganelles(state, onProgress){
 
 // choose a target LOD for an organelle from its distance (closer => finer => lower index),
 // clamped so we never go finer than the byte budget. Mirrors ng's projected-size idea.
+// below this radius, refining past medium is pure cost with no perceptible payoff — measured
+// directly against real data: a nucleus instance (r ~4-5, vs. the scene's overall ~100-unit
+// scale) jumps from ~4000 to ~20000 triangles (5x) going medium->finest, at 15-30ms of decode
+// cost each, for a small round blob that looks identical either way at any real viewing
+// distance. With dozens of these clustered together, flying near them was triggering a cascade
+// of expensive, invisible upgrades — the dominant cost behind "still slow" even when nothing
+// visibly changes. endoth-sized structures (r ~10-20+) are well above this and still refine
+// normally, where the extra detail is actually large enough to matter.
+const MIN_REFINE_R = 8;
 function pickLOD(meta, dist, r){
-  // rest at MEDIUM (meta._Linit) when far, refine toward resCap as you approach — never coarser than
-  // medium, so nothing degrades to the blocky coarsest level once loaded.
-  const man=meta.man, coarse=(meta._Linit!=null?meta._Linit:meta._L0);
+  // rest at MEDIUM (meta._Linit) when far, refine toward the detail slider's floor as you
+  // approach. That floor used to be hard-capped at medium regardless of the slider — "min"
+  // never actually reached a mesh's true coarsest level, which defeats the point of a detail
+  // slider for anyone who wants lower detail for performance. The floor (and the ceiling on how
+  // coarse we'll EVER go) now scales with the slider directly against THIS mesh's own coarsest
+  // level, so dragging to "min" really does bottom it out, on every mesh regardless of how many
+  // LOD levels it has — untouched (resCap=0), behavior is unchanged from before.
+  const man=meta.man, medium=(meta._Linit!=null?meta._Linit:meta._L0), coarsest=coarsestLOD(man);
   let want = Math.round(Math.log2(Math.max(dist,0.01)/Math.max(r*0.6,0.01)));
-  want = Math.min(coarse, Math.max(resCap, want));   // detail slider caps how fine we go (never finer than resCap, never coarser than medium)
-  while(want<coarse && lodBytes(man,want)>LOD_BUDGET) want++;
+  let floor = Math.round(coarsest*resCap);
+  // small meshes stay pinned at medium regardless of distance UNLESS the user has explicitly
+  // asked for more via the detail slider (resCap>0 always still honored, even on small things).
+  if(r<MIN_REFINE_R && resCap===0) floor=medium;
+  const ceiling = Math.min(coarsest, Math.max(medium, floor));
+  want = Math.min(ceiling, Math.max(floor, want));
+  while(want<ceiling && lodBytes(man,want)>LOD_BUDGET) want++;
   return want;
 }
 
@@ -1335,7 +1532,7 @@ function manageLOD(dt){
     // (you're always ~r away, right at its surface) — without this, jetpack's tiny hover distance
     // constantly reads as "very close, load the finest LOD", triggering repeated decode/rebuild
     // churn just from standing still. Leave it at whatever level it loaded at.
-    if(skate.active && mesh===skate.root) continue;
+    if(surface.active && mesh===surface.root) continue;
     const want=pickLOD(ud.meta, ud._d, ud.r);
     // hysteresis: refine promptly, but only coarsen when clearly far — avoids thrash/popping
     if(want < ud.lod) startLODSwap(mesh, ud.lod-1);
@@ -1348,10 +1545,16 @@ async function startLODSwap(mesh, L){
   try{
     const draco=await ensureDraco();
     const r=await loadLOD(draco, ud.meta, L);
-    if(token===diveToken && r){
+    // a laser hole can get punched into mesh.geometry while THIS fetch was still in flight —
+    // manageLOD's ud.punched check only stops NEW swaps from starting, it can't see one already
+    // in progress. Re-check here too, or applying this (freshly fetched, un-holed) geometry now
+    // would silently erase the hole the instant this resolves, with zero visual cue it happened.
+    if(token===diveToken && r && !ud.punched){
       const ng=buildLODGeometry(r.posNm, r.idx);
       const old=mesh.geometry; mesh.geometry=ng; if(old) old.dispose();
-      ud.lod=L; ud.r=ng.boundingSphere.radius; ud.center.copy(ng.boundingSphere.center);
+      mesh.position.copy(ng.userData.centerOffset);   // geometry is mesh-local now; recentered per LOD level too (see buildLODGeometry)
+      mesh.updateMatrixWorld(true);
+      ud.lod=L; ud.r=ng.boundingSphere.radius; ud.center.copy(mesh.position).add(ng.boundingSphere.center);
     }
   }catch(e){ /* keep current LOD on failure */ }
   finally{ ud.loading=false; lodLoading=Math.max(0,lodLoading-1); }
@@ -1401,7 +1604,7 @@ function clearScene(){
   if(pickTarget){ pickTarget.dispose(); pickTarget=null; } aimHit=null; pickTimer=0;
   hoverMesh=null; _hoverSaved.length=0;
   currentFit=null; lodLoading=0; lodTimer=0; questActive=false;
-  skate.active=false; skate.root=null; skate.type=null; skate.side="outside"; skate.forward.set(0,0,-1); skate.gravity.copy(WORLD_DOWN); skate.lean=0; skate.grace=0;
+  surface.active=false; surface.root=null; surface.type=null; surface.side="outside"; surface.forward.set(0,0,-1); surface.gravity.copy(WORLD_DOWN); surface.lean=0; surface.grace=0;
   boardAir.active=false; boardAir.root=null; boardAir.side="outside"; boardAir.normal.set(0,1,0); boardAir.gravity.copy(WORLD_DOWN); boardAir.age=0; boardAir.cooldown=0;
   laserBolts.forEach(b=>{ b.mesh.geometry.dispose(); b.mesh.material.dispose(); }); laserBolts.length=0; boltTimer=0;
 }
@@ -1577,6 +1780,7 @@ function buildScene(d, rnd){
   const dmat = new THREE.MeshBasicMaterial({color:0x6f86ad, transparent:true, opacity:0.45});
   for(let i=0;i<300;i++){ const dd=new THREE.Mesh(dgeo,dmat);
     dd.position.set((rnd()-.5)*CELL_R*1.8,(rnd()-.5)*CELL_R*1.8,(rnd()-.5)*CELL_R*1.8); dust.add(dd); }
+  dust.visible = dustOn;
   scene.add(dust);
 
   // the avatar (only shown in the external view; hidden in 1st person)
@@ -1656,9 +1860,9 @@ function makeKinesin(){
 }
 function makeAvatar(){ return avatarMode==="kinesin" ? makeKinesin() : makeBus(); }
 function avatarName(){ return avatarMode==="kinesin" ? "kinesin" : "bus"; }
-function avatarHover(){ return SKATE_HOVER * Math.max(0.55, Math.sqrt(avatarScale)); }
-// avatarHover()/SKATE_PROBE are sized for the AVATAR, not the mesh it's standing on — fine for a
-// big root like the nucleus, but on anything smaller than ~2x SKATE_PROBE the fixed-distance probe
+function avatarHover(){ return SURFACE_HOVER * Math.max(0.55, Math.sqrt(avatarScale)); }
+// avatarHover()/SURFACE_PROBE are sized for the AVATAR, not the mesh it's standing on — fine for a
+// big root like the nucleus, but on anything smaller than ~2x SURFACE_PROBE the fixed-distance probe
 // used to keep you snapped to the surface can overshoot clean through the mesh (or the far side of
 // a thin shell) and get a bogus hit, which reads as violent jitter/detach-reattach cycling. Scale
 // both down to the root's own size so tracking stays local to the surface you're actually on.
@@ -1666,7 +1870,16 @@ function avatarHover(){ return SKATE_HOVER * Math.max(0.55, Math.sqrt(avatarScal
 // you're standing on clips/z-fights right in front of the camera, which was also likely why the
 // laser's crosshair raycast felt like it "wasn't working" while standing on something small.
 function hoverFor(root){ const r=(root&&root.userData&&root.userData.r)||30; return Math.min(avatarHover(), Math.max(1.5, r*0.12)); }
-function probeFor(root){ const r=(root&&root.userData&&root.userData.r)||30; return Math.max(2.5, Math.min(SKATE_PROBE, r*0.7)); }
+// this offsets the resnap raycast's origin before it searches back toward the surface — it only
+// needs to comfortably exceed how far you might drift between resnap ticks (an AVATAR property),
+// not the mesh's own size. It used to scale UP with the mesh's whole bounding-sphere radius
+// (min(SURFACE_PROBE, r*0.7)) on the theory that a bigger mesh needs a wider search net — but for
+// an elongated shape (a hollow tube) that radius reflects LENGTH, not local cross-sectional
+// thickness. Verified against the real geometry: an 18-unit offset on a ~15-unit-wide tube
+// interior overshoots clean through to the OPPOSITE wall, and every probe value from 10 up
+// reproduced that; everything from 2.5 up to 8 (comfortably above 3x hover) stayed correct. Capped
+// by hoverFor()*3 now, so it scales with the avatar's own hover distance instead of mesh size.
+function probeFor(root){ const r=(root&&root.userData&&root.userData.r)||30; return Math.max(2.5, Math.min(SURFACE_PROBE, r*0.7, hoverFor(root)*3)); }
 function avatarMoveScale(){ return Math.max(0.16, Math.min(1.35, Math.sqrt(avatarScale))); }
 function applyAvatarScale(updateTools=true){
   if(bus) bus.scale.setScalar(avatarScale);
@@ -1723,7 +1936,7 @@ function switchExplorationMode(m){
   const target = (m==='jetpack') ? 'jetpack' : 'flight';
   if(target===explorationMode) return;
   explorationMode = target;
-  if(skate.active) detachSkate(false, null);
+  if(surface.active) detachSurface(false, null);
   boardAir.active=false;
   avatarMode = explorationMode==='jetpack' ? 'kinesin' : 'bus';
   avatarScale = autoAvatarScale();
@@ -1915,6 +2128,16 @@ function toggleShadows(on){
   setToolStates();
 }
 function toggleColors(on){ uniqueColors = on!==undefined?on:!uniqueColors; applyColors(); setToolStates(); }
+function toggleDust(on){ dustOn = on!==undefined?on:!dustOn; if(dust) dust.visible=dustOn; setToolStates(); }
+function toggleDynamicLOD(on){ dynamicLOD = on!==undefined?on:!dynamicLOD; setToolStates(); }
+function toggleFlashlight(on){
+  const turnOn = on!==undefined ? on : spotIntensity<=0;
+  if(turnOn){ spotIntensity = spotLastOn>0?spotLastOn:2.6; }
+  else { if(spotIntensity>0) spotLastOn=spotIntensity; spotIntensity=0; }
+  if(spot) spot.intensity=spotIntensity;
+  setToolStates();
+  flash('flashlight '+(turnOn?'on':'off'));
+}
 
 // ---- Ms. Frizzle narration via the free, local Web Speech API ----
 const FRIZZ = {
@@ -1966,7 +2189,7 @@ function proximityNarrate(){
 function shortAng(a){ while(a>Math.PI)a-=2*Math.PI; while(a<-Math.PI)a+=2*Math.PI; return a; }
 function startTour(){
   if(!targets.length) return;
-  detachSkate(false);
+  detachSurface(false);
   questActive=false;
   touring=true; thirdPerson=true; tourIdx=0; tourDwell=0; targets.forEach(t=>t._narr=false);
   narrate("All aboard the cell bus! Let's take a tour. First stop, coming right up!");
@@ -2135,8 +2358,8 @@ const keys={};
 addEventListener('keydown', e=>{ if(e.code==="Space"||e.code==="Tab") e.preventDefault();
   if(!e.repeat && !gameEl.classList.contains('hidden')){
     if(e.code==="Tab") setUiFree(!uiFree);
-    else if(e.code==="Space" && skate.active) liftOff();
-    else if(e.code==="KeyR" && skate.active) liftOff();
+    else if(e.code==="Space" && surface.active) liftOff();
+    else if(e.code==="KeyR" && surface.active) liftOff();
     else if(e.code==="KeyV") toggleView();
     else if(e.code==="KeyN" && !spec.custom) toggleNarration();
     else if(e.code==="KeyT" && !spec.custom) (touring?stopTour():startTour());
@@ -2144,7 +2367,7 @@ addEventListener('keydown', e=>{ if(e.code==="Space"||e.code==="Tab") e.preventD
     else if(e.code==="KeyH") toggleShadows();
     else if(e.code==="KeyM") setAmbience();
     else if(e.code==="KeyG" && !spec.custom) (questActive?stopCargoRun():startCargoRun());
-    else if(e.code==="KeyX") toggleSkateMode();
+    else if(e.code==="KeyX") toggleSurfaceMode();
     else if(e.code==="KeyK") cycleAvatar();
     else if(e.code==="BracketLeft") resizeAvatar(-1);
     else if(e.code==="BracketRight") resizeAvatar(1);
@@ -2155,8 +2378,10 @@ addEventListener('wheel', e=>{
   if(gameEl.classList.contains('hidden')) return;
   e.preventDefault();
   spotIntensity = Math.max(0, Math.min(9, spotIntensity - Math.sign(e.deltaY)*0.6));
+  if(spotIntensity>0) spotLastOn = spotIntensity;
   if(spot) spot.intensity = spotIntensity;
-  flash('torch '+(spotIntensity<=0?'off':Math.round(spotIntensity/9*100)+'%'));
+  flash('flashlight '+(spotIntensity<=0?'off':Math.round(spotIntensity/9*100)+'%'));
+  setToolStates();
 }, {passive:false});
 addEventListener('keyup',   e=>{ keys[e.code]=false; });
 let lastX=0,lastY=0,yaw=0,pitch=0,yawRaw=0,pitchRaw=0,haveLastPos=false,uiFree=false,pointerLocked=false;
@@ -2169,7 +2394,14 @@ function setUiFree(v){
   appEl.style.cursor = uiFree ? 'default' : 'none';
   document.getElementById('menuOverlay').classList.toggle('hidden', !uiFree);
   const close=document.getElementById('menuClose');
-  if(close) close.textContent = awaitingFirstClick ? '▶ start diving' : '✕ resume (TAB)';
+  if(close){
+    close.textContent = awaitingFirstClick ? '▶ start diving' : '✕ resume (TAB)';
+    close.classList.toggle('start', awaitingFirstClick);
+  }
+  const sub=document.getElementById('menuSub');
+  if(sub) sub.innerHTML = awaitingFirstClick
+    ? 'click <b>▶ start diving</b> above (or anywhere outside this box) to begin'
+    : 'click outside or press <b>TAB</b> to close · <b>ESC</b> anytime releases the cursor';
   const hint=document.getElementById('tabHint');
   if(hint) hint.innerHTML = uiFree ? 'press <b>TAB</b> to resume flying' : 'press <b>TAB</b> for menu';
   // release the OS cursor for clicking toolbar buttons — Pointer Lock keeps it invisible AND
@@ -2181,8 +2413,11 @@ function setUiFree(v){
   if(!uiFree && awaitingFirstClick){
     awaitingFirstClick=false;
     document.getElementById('lockHint').classList.add('hidden');
-    requestLook();
   }
+  // re-lock immediately on every close, not just the first — otherwise switching modes (e.g.
+  // jetpack, via the toolbar) and closing the menu with TAB/resume/click-outside left the cursor
+  // unlocked until an extra click, which read as "jetpack broke the cursor lock".
+  if(!uiFree) requestLook();
 }
 // Pointer Lock: the real, standard way browser games do mouse-look — locks + hides the OS
 // cursor and gives unbounded relative movement (no more hitting the edge of the screen, and no
@@ -2247,7 +2482,7 @@ const _skMat=new THREE.Matrix4();
 const _skQuat=new THREE.Quaternion();
 const _sn0=new THREE.Vector3(), _sn1=new THREE.Vector3(), _sn2=new THREE.Vector3(), _sn3=new THREE.Vector3(), _sn4=new THREE.Vector3();
 
-function skateRootFor(obj){
+function surfaceRootFor(obj){
   for(let o=obj; o && o!==scene; o=o.parent){
     if(o.userData && o.userData.type) return o;
   }
@@ -2260,19 +2495,19 @@ function isVisibleObject(obj){
   }
   return true;
 }
-function skateRootCenter(root){
+function surfaceRootCenter(root){
   return root && root.userData && root.userData.center ? root.userData.center : (root ? root.position : _sk0.set(0,0,0));
 }
-function skateRootName(root){
+function surfaceRootName(root){
   const type=root && root.userData && root.userData.type;
   return type && ORG[type] ? ORG[type].name : (type || "surface");
 }
-function skateRoots(){
-  // SKATE_MIN_R is sized for a normal-sized avatar (flight/skateboarding) — for jetpack's
+function surfaceRoots(){
+  // SURFACE_MIN_R is sized for a normal-sized avatar (flight/skateboarding) — for jetpack's
   // much-smaller-than-a-mesh avatar, that fixed threshold excluded most small organelles from
   // ever being landable at all ("doesn't work when there's lots of meshes"). Scale it down with
   // avatar size so a tiny avatar can land on tiny things too.
-  const minR = Math.max(0.3, SKATE_MIN_R*Math.sqrt(avatarScale));
+  const minR = Math.max(0.3, SURFACE_MIN_R*Math.sqrt(avatarScale));
   const seen=new Set(), out=[];
   const add=m=>{
     if(!m || seen.has(m) || !isVisibleObject(m)) return;
@@ -2311,144 +2546,158 @@ function rawOrientedHitNormal(hit){
   if(n.dot(_sk1)<0) n.negate();
   return n.normalize();
 }
-function skateSideFor(root, hit, normal){
-  const c=skateRootCenter(root);
+function surfaceSideFor(root, hit, normal){
+  const c=surfaceRootCenter(root);
   _sk2.copy(hit.point).sub(c);
   if(_sk2.lengthSq()<1e-6) return "outside";
   return normal.dot(_sk2) >= 0 ? "outside" : "inside";
 }
-function skateTargetNormal(root, hit, side){
+function surfaceTargetNormal(root, hit, side){
   const n=rawOrientedHitNormal(hit);
-  const c=skateRootCenter(root);
-  const radial=_sk2.copy(hit.point).sub(c);
-  if(radial.lengthSq()>1e-6){
-    radial.normalize();
-    if(side==="inside") radial.negate();
-    if(n.dot(radial)<0) radial.negate();
-    n.lerp(radial, 0.6).normalize();    // real meshes are faceted; radial bias damps triangle chatter on blob-like surfaces
-  }
+  // radial-bias smoothing (blending toward hit-point-minus-whole-mesh-centroid, to damp faceted-
+  // mesh triangle chatter on blob-like organelles) is disabled for now — it was corrupting the
+  // normal badly on elongated shapes (a hollow tube), and even the agreement-scaled version is
+  // parked here rather than removed in case it's worth revisiting for actual blob organelles.
   return n;
 }
+// real gravity, not mesh-relative — same rule regardless of side, so standing outside a mesh and
+// standing inside one pull the same way and feel the same, rather than outside being anchored
+// straight into the surface (no roll possible) while inside rolls toward whatever world-down means
+// locally. root/side/normal are unused now but kept so call sites don't need to change.
 function boardGravityFor(root, side, normal, out){
-  if(side==="outside"){
-    out.copy(normal);
-    if(out.lengthSq()<1e-6) out.copy(WORLD_DOWN);
-    return out.negate().normalize();
-  }
   return out.copy(WORLD_DOWN);
 }
-function updateSkateGravity(){
-  if(!skate.active || !skate.root){ skate.gravity.copy(WORLD_DOWN); return; }
-  boardGravityFor(skate.root, skate.side, skate.normal, skate.gravity);
+function updateSurfaceGravity(){
+  if(!surface.active || !surface.root){ surface.gravity.copy(WORLD_DOWN); return; }
+  boardGravityFor(surface.root, surface.side, surface.normal, surface.gravity);
 }
-function bestSkateHit(hits){
+function bestSurfaceHit(hits){
   for(const h of hits){
-    const root=skateRootFor(h.object);
+    const root=surfaceRootFor(h.object);
     if(root && isVisibleObject(root)) return {hit:h, root};
   }
   return null;
 }
-function raycastSkateRoots(origin, dir, far, roots){
+function raycastSurfaceRoots(origin, dir, far, roots){
   raycaster.near=0;
   raycaster.far=far;
   raycaster.set(origin, dir.normalize());
-  return bestSkateHit(raycaster.intersectObjects(roots, true));
+  return bestSurfaceHit(raycaster.intersectObjects(roots, true));
 }
-function findSkateSurface(){
-  const roots=skateRoots();
+function findSurface(){
+  const roots=surfaceRoots();
   if(!roots.length) return null;
 
   // First try the thing under the crosshair.
-  let found=raycastSkateRoots(playerPos, _sk0.copy(fwd), SKATE_LATCH_DIST, roots);
+  let found=raycastSurfaceRoots(playerPos, _sk0.copy(fwd), SURFACE_LATCH_DIST, roots);
   if(found) return found;
 
-  // Then try nearby large surfaces, so you can latch while gliding beside a nucleus.
+  // Then try nearby large surfaces, so you can latch while gliding beside a nucleus — aiming at
+  // the mesh's ONE whole-object centroid and taking whatever that ray hits first, however far.
+  // Fine for a round/blob organelle (centroid direction ~= a nearby point on its surface). Badly
+  // wrong for an elongated shape (a hollow tube): "toward center" points mostly along its full
+  // length, so a forward-raycast miss (e.g. looking generally down a tube's interior instead of
+  // straight at its wall) can bridge to a DISTANT, unrelated point on the very same mesh — this is
+  // what was landing manual mounts (X) on the tube's outer wall from deep inside it. Reject hits
+  // that aren't actually close to the player; a real "gliding past a big curved surface" miss is
+  // always close, so this only screens out exactly the cases this heuristic gets wrong.
   let best=null, bestDist=Infinity;
   for(const root of roots){
-    const c=skateRootCenter(root);
+    const c=surfaceRootCenter(root);
     const d=playerPos.distanceTo(c);
     const r=root.userData.r || 0;
-    if(d > Math.max(SKATE_LATCH_DIST, r + SKATE_LATCH_DIST)) continue;
+    if(d > Math.max(SURFACE_LATCH_DIST, r + SURFACE_LATCH_DIST)) continue;
     const dir=_sk0.copy(c).sub(playerPos);
     if(dir.lengthSq()<1e-4) continue;
-    found=raycastSkateRoots(playerPos, dir, d + r + 8, [root]);
-    if(found && found.hit.distance<bestDist){ best=found; bestDist=found.hit.distance; }
+    const cand=raycastSurfaceRoots(playerPos, dir, d + r + 8, [root]);
+    if(cand && cand.hit.distance<=SURFACE_LATCH_DIST && cand.hit.distance<bestDist){ best=cand; bestDist=cand.hit.distance; }
   }
   return best;
 }
-function attachSkate(found, mode){
+function attachSurface(found, mode){
   boardAir.active=false;
-  skate.active=true;
-  skate.mode=mode||"board";
-  skate.root=found.root;
-  skate.type=found.root.userData.type || null;
+  surface.active=true;
+  surface.mode=mode||"board";
+  surface.root=found.root;
+  surface.type=found.root.userData.type || null;
   const hitNormal=rawOrientedHitNormal(found.hit);
-  skate.side=skateSideFor(found.root, found.hit, hitNormal);
-  skate.normal.copy(skateTargetNormal(found.root, found.hit, skate.side));
-  skate.forward.copy(fwd).projectOnPlane(skate.normal);
-  if(skate.forward.lengthSq()<1e-4) skate.forward.copy(vel).projectOnPlane(skate.normal);
-  if(skate.forward.lengthSq()<1e-4) skate.forward.copy(right).projectOnPlane(skate.normal);
-  skate.forward.normalize();
-  updateSkateGravity();
-  skate.lean=0;
-  skate.grace=0;
+  surface.side=surfaceSideFor(found.root, found.hit, hitNormal);
+  surface.normal.copy(surfaceTargetNormal(found.root, found.hit, surface.side));
+  console.log('[celldive][attachSurface]', {type:surface.type, uid:found.root.userData.uid, mode:surface.mode, side:surface.side,
+    point:found.hit.point.toArray().map(v=>+v.toFixed(2)), normal:surface.normal.toArray().map(v=>+v.toFixed(2)),
+    meshR:+((found.root.userData.r||0).toFixed(2))});
+  surface.forward.copy(fwd).projectOnPlane(surface.normal);
+  if(surface.forward.lengthSq()<1e-4) surface.forward.copy(vel).projectOnPlane(surface.normal);
+  if(surface.forward.lengthSq()<1e-4) surface.forward.copy(right).projectOnPlane(surface.normal);
+  surface.forward.normalize();
+  updateSurfaceGravity();
+  surface.lean=0;
+  surface.grace=0;
   if(mode==='walk'){
-    // jetpack auto-landing should ease onto a surface as it's reached, not teleport the instant
-    // one's detected underneath — leave playerPos exactly where the fall put it; resnapSkate's
-    // existing per-frame lerp (already used for ongoing tracking) pulls it snugly onto the real
-    // surface point over the next few frames instead of an instant jump. Manual skateboard-mount
-    // (X) below still grabs on immediately, which is the point of pressing it.
-    skate.lastPoint.copy(playerPos).addScaledVector(skate.normal, -hoverFor(found.root));
+    // easing onto a surface rather than teleporting the instant it's found reads better — but
+    // only over a gap resnapSurface's own tracking probe can actually still reach next frame.
+    // X now lands from as far away as findSurface's full aim range (tens of units), well beyond
+    // that reach, so leaving playerPos exactly where a far-off press caught you had resnapSurface
+    // immediately fail to re-find the surface and detach again right away — "lands on it, then
+    // instantly falls/bounces off". Clamp the starting gap to what tracking can bridge; anything
+    // farther just starts the ease-in from as close as it can, instead of guaranteeing failure.
+    const maxGap = probeFor(found.root) + hoverFor(found.root);
+    if(playerPos.distanceTo(found.hit.point) > maxGap){
+      _sk1.copy(playerPos).sub(found.hit.point).setLength(maxGap);
+      playerPos.copy(found.hit.point).add(_sk1);
+    }
+    surface.lastPoint.copy(playerPos).addScaledVector(surface.normal, -hoverFor(found.root));
   } else {
-    skate.lastPoint.copy(found.hit.point);
-    playerPos.copy(found.hit.point).addScaledVector(skate.normal, hoverFor(found.root));
+    surface.lastPoint.copy(found.hit.point);
+    playerPos.copy(found.hit.point).addScaledVector(surface.normal, hoverFor(found.root));
   }
-  vel.projectOnPlane(skate.normal);
+  vel.projectOnPlane(surface.normal);
   if(vel.lengthSq()<16){
-    _sk0.copy(fwd).projectOnPlane(skate.normal);
+    _sk0.copy(fwd).projectOnPlane(surface.normal);
     if(_sk0.lengthSq()>1e-4) vel.addScaledVector(_sk0.normalize(), 10);
   }
   touring=false;
   // view stays whatever it already was — don't yank the player into third person just for landing
-  const verb = skate.mode==="walk" ? "walking on " : "skateboarding ";
-  flash((skate.side==="inside"?"inside ":"")+verb+skateRootName(found.root));
+  const verb = surface.mode==="walk" ? "walking on " : "skateboarding ";
+  flash((surface.side==="inside"?"inside ":"")+verb+surfaceRootName(found.root));
   setToolStates();
 }
-function detachSkate(kick, msg){
-  if(!skate.active) return;
-  if(kick) vel.addScaledVector(skate.normal, 18);
-  skate.active=false;
-  skate.root=null;
-  skate.type=null;
-  skate.side="outside";
-  skate.lean=0;
-  skate.grace=0;
-  jetLandGrace=0.5;   // don't immediately re-snap back onto whatever you just left
+function detachSurface(kick, msg){
+  if(!surface.active) return;
+  console.log('[celldive][detachSurface]', {reason:msg||'(none)', kick, type:surface.type});
+  if(kick) vel.addScaledVector(surface.normal, 18);
+  surface.active=false;
+  surface.root=null;
+  surface.type=null;
+  surface.side="outside";
+  surface.lean=0;
+  surface.grace=0;
   if(msg) flash(msg);
   setToolStates();
 }
 // SPACE/R while standing: in jetpack mode this should actually jetpack you off the ground, not
-// do a skateboard-style hop-and-land-back-in-the-same-spot (jumpSkate/boardAir) — that mechanic
+// do a skateboard-style hop-and-land-back-in-the-same-spot (jumpSurface/boardAir) — that mechanic
 // is what was making it feel like "jetpack doesn't work" right after leaving a surface. Detach
 // and give a small kick; SPACE is still held on the very same keypress, so free-flight jetpack
 // thrust (in tick()) picks up immediately afterward and actually carries you up.
 function liftOff(){
-  if(!skate.active) return;
-  if(explorationMode==='jetpack' && skate.mode==='walk'){
-    const n=_sk0.copy(skate.normal);
-    detachSkate(false, "jetpack!");
-    vel.addScaledVector(n, 6);
+  if(!surface.active) return;
+  if(explorationMode==='jetpack' && surface.mode==='walk'){
+    // a jetpack thrusts up, period — not "away from whatever surface you happened to be
+    // standing on" (surface.normal could point sideways on a wall or downward on a ceiling).
+    detachSurface(false, "jetpack!");
+    vel.addScaledVector(WORLD_UP, 6);
     return;
   }
-  jumpSkate();
+  jumpSurface();
 }
-function jumpSkate(){
-  if(!skate.active) return;
-  const n=_sk0.copy(skate.normal);
+function jumpSurface(){
+  if(!surface.active) return;
+  const n=_sk0.copy(surface.normal);
   const launch=_sk1.copy(fwd).projectOnPlane(n);
-  const launchRoot=skate.root, launchSide=skate.side, launchMode=skate.mode;
-  const launchGravity=_sk2.copy(skate.gravity);
-  detachSkate(false, "jump");
+  const launchRoot=surface.root, launchSide=surface.side, launchMode=surface.mode;
+  const launchGravity=_sk2.copy(surface.gravity);
+  detachSurface(false, "jump");
   boardAir.active=true;
   boardAir.root=launchRoot;
   boardAir.side=launchSide;
@@ -2463,111 +2712,133 @@ function jumpSkate(){
   if(launch.lengthSq()>1e-4) vel.addScaledVector(launch.normalize(), Math.max(3, hop*0.35));
   scanCooldown=0.28;
 }
-function toggleSkateMode(){
-  if(boardAir.active){ boardAir.active=false; jetLandGrace=0.5; setToolStates(); flash("flight"); return; }
-  if(skate.active){ detachSkate(true, skate.mode==='walk'?"stopped walking":"detached"); return; }
-  if(explorationMode==='jetpack'){ flash("no skateboard in jetpack mode — land on a surface to walk it"); return; }
-  const found=findSkateSurface();
-  if(found) attachSkate(found);
-  else flash("no boardable surface");
+function toggleSurfaceMode(){
+  if(boardAir.active){ boardAir.active=false; setToolStates(); flash("flight"); return; }
+  if(surface.active){ detachSurface(true, surface.mode==='walk'?"stopped walking":"detached"); return; }
+  // jetpack has no passive auto-land — falling just falls. X is the only way to land: whatever's
+  // under the crosshair, same target-finding as flight mode's manual mount, just in 'walk' mode
+  // (no skateboard avatar).
+  const found=findSurface();
+  if(!found){ flash("no boardable surface"); return; }
+  attachSurface(found, explorationMode==='jetpack' ? 'walk' : undefined);
 }
-function resnapSkate(dt){
-  const root=skate.root;
-  if(!root || !isVisibleObject(root)){ detachSkate(false, "surface hidden"); return; }
+function resnapSurface(dt){
+  const root=surface.root;
+  if(!root || !isVisibleObject(root)){ detachSurface(false, "surface hidden"); return; }
   const probe=probeFor(root), hover=hoverFor(root);
-  const origin=_sk0.copy(playerPos).addScaledVector(skate.normal, probe);
-  const hit=raycastSkateRoots(origin, _sk1.copy(skate.normal).negate(), probe*2 + hover + 8, [root]);
-  let found=hit;
+  const origin=_sk0.copy(playerPos).addScaledVector(surface.normal, probe);
+  let found=raycastSurfaceRoots(origin, _sk1.copy(surface.normal).negate(), probe*2 + hover + 8, [root]);
   // the toward-center fallback exists to re-find a surface you're skimming near the edge of —
   // but on a mesh you've cut a hole into, that same fallback would happily bridge straight across
   // the gap to the far inner wall and re-attach you there, which is exactly "won't let me fall
   // through". Skip it for punched meshes: losing the primary probe there should just mean you're
   // over the hole, so let it fall through to the grace-then-detach path below instead.
   if(!found && !root.userData.punched){
-    const c=skateRootCenter(root);
+    const c=surfaceRootCenter(root);
     const dir=_sk1.copy(c).sub(playerPos);
     if(dir.lengthSq()>1e-4){
-      const cand=raycastSkateRoots(playerPos, dir, dir.length() + (root.userData.r||0) + 8, [root]);
+      const cand=raycastSurfaceRoots(playerPos, dir, dir.length() + (root.userData.r||0) + 8, [root]);
       // only accept this recovery if the surface is still right here (a grazing-angle miss on a
       // curved patch) — if it's genuinely far off across an actual edge, reject it and fall through
       // to the grace-then-detach path below, so walking/skating off a real edge lets you fall
       // instead of getting bridged straight back onto the surface from anywhere in front of you.
-      if(cand && cand.hit.distance < probe+hover+4) found=cand;
+      // Distance alone isn't enough on a convex shape though: walking off the edge of something
+      // round, "toward center" can still hit the far/underside within range, which bridged you
+      // straight onto the opposite face instead of letting you fall — reject any recovery whose
+      // normal faces a fundamentally different way (more than ~90° off) from the surface you were
+      // actually just standing on; a real "same patch" recovery is never that different.
+      if(cand){
+        const testNormal=surfaceTargetNormal(root, cand.hit, surface.side);
+        if(cand.hit.distance < probe+hover+4 && testNormal.dot(surface.normal)>0){
+          found=cand;
+          console.log('[celldive][resnapSurface] center-fallback recovery fired', {type:root.userData.type, dist:+cand.hit.distance.toFixed(2)});
+        }
+      }
     }
   }
   if(found && found.root===root){
-    skate.grace=0;
-    const targetNormal=skateTargetNormal(root, found.hit, skate.side);
-    if(targetNormal.dot(skate.normal)<0) targetNormal.negate();
-    skate.normal.lerp(targetNormal, 1-Math.exp(-2.6*dt)).normalize();
-    skate.lastPoint.lerp(found.hit.point, 1-Math.exp(-24*dt));
-    playerPos.copy(skate.lastPoint).addScaledVector(skate.normal, hover);
-    vel.projectOnPlane(skate.normal);
-    updateSkateGravity();
+    surface.grace=0;
+    const targetNormal=surfaceTargetNormal(root, found.hit, surface.side);
+    if(targetNormal.dot(surface.normal)<0) targetNormal.negate();
+    const _dbgOldPos=playerPos.clone(), _dbgOldNormal=surface.normal.clone();
+    surface.normal.lerp(targetNormal, 1-Math.exp(-2.6*dt)).normalize();
+    surface.lastPoint.lerp(found.hit.point, 1-Math.exp(-24*dt));
+    playerPos.copy(surface.lastPoint).addScaledVector(surface.normal, hover);
+    vel.projectOnPlane(surface.normal);
+    updateSurfaceGravity();
+    const _dbgJump=_dbgOldPos.distanceTo(playerPos), _dbgAngle=_dbgOldNormal.angleTo(surface.normal)*180/Math.PI;
+    if(_dbgJump>0.5 || _dbgAngle>8){
+      console.log('[celldive][resnapSurface] BIG JUMP', {type:root.userData.type, posJump:+_dbgJump.toFixed(2),
+        normalAngleDeg:+_dbgAngle.toFixed(1), hitDist:+found.hit.distance.toFixed(2), side:surface.side,
+        hitPoint:found.hit.point.toArray().map(v=>+v.toFixed(1))});
+    }
   } else {
-    skate.grace += dt;
-    if(skate.grace>0.35) detachSkate(false, "lost surface");
+    surface.grace += dt;
+    if(surface.grace>0.35) detachSurface(false, "lost surface");
   }
 }
-function updateSkate(dt, boost, anyDrive){
-  if(!skate.active) return;
-  updateSkateGravity();
-  skate.forward.projectOnPlane(skate.normal);
-  if(skate.forward.lengthSq()<1e-4) skate.forward.copy(fwd).projectOnPlane(skate.normal);
-  if(skate.forward.lengthSq()<1e-4) skate.forward.copy(vel).projectOnPlane(skate.normal);
-  if(skate.forward.lengthSq()<1e-4) skate.forward.copy(right).projectOnPlane(skate.normal);
-  skate.forward.normalize();
+function updateBoard(dt, boost, anyDrive){
+  if(!surface.active) return;
+  updateSurfaceGravity();
+  surface.forward.projectOnPlane(surface.normal);
+  if(surface.forward.lengthSq()<1e-4) surface.forward.copy(fwd).projectOnPlane(surface.normal);
+  if(surface.forward.lengthSq()<1e-4) surface.forward.copy(vel).projectOnPlane(surface.normal);
+  if(surface.forward.lengthSq()<1e-4) surface.forward.copy(right).projectOnPlane(surface.normal);
+  surface.forward.normalize();
 
   const sizeSpeed=avatarMoveScale();
   const thrust=boost>1 ? 1.55 : 1;
   const speed=vel.length();
   const turnInput=(keys['KeyD']?1:0) - (keys['KeyA']?1:0);
   const targetLean=turnInput * Math.min(0.68, 0.25 + speed*0.014);
-  skate.lean += (targetLean-skate.lean) * (1-Math.exp(-8.5*dt));
-  if(Math.abs(skate.lean)>0.002){
-    const turnRate=(0.92 + Math.min(speed,46)*0.038) * Math.abs(skate.lean);
-    _skQuat.setFromAxisAngle(skate.normal, -Math.sign(skate.lean)*turnRate*dt);
-    skate.forward.applyQuaternion(_skQuat).projectOnPlane(skate.normal).normalize();
+  surface.lean += (targetLean-surface.lean) * (1-Math.exp(-8.5*dt));
+  if(Math.abs(surface.lean)>0.002){
+    const turnRate=(0.92 + Math.min(speed,46)*0.038) * Math.abs(surface.lean);
+    _skQuat.setFromAxisAngle(surface.normal, -Math.sign(surface.lean)*turnRate*dt);
+    surface.forward.applyQuaternion(_skQuat).projectOnPlane(surface.normal).normalize();
   }
 
-  const tangentRight=_sk1.crossVectors(skate.forward, skate.normal).normalize();
-  if(keys['KeyW']) vel.addScaledVector(skate.forward, 31*thrust*sizeSpeed*dt);
+  const tangentRight=_sk1.crossVectors(surface.forward, surface.normal).normalize();
+  if(keys['KeyW']) vel.addScaledVector(surface.forward, 31*thrust*sizeSpeed*dt);
   if(keys['KeyS']){
-    vel.addScaledVector(skate.forward, -18*sizeSpeed*dt);
+    vel.addScaledVector(surface.forward, -18*sizeSpeed*dt);
     vel.multiplyScalar(Math.pow(0.94, dt*60));
   }
 
-  const planarVel=_sk2.copy(vel).projectOnPlane(skate.normal);
+  const planarVel=_sk2.copy(vel).projectOnPlane(surface.normal);
   if(Math.abs(turnInput)<0.05 && planarVel.lengthSq()>9){
-    skate.forward.lerp(planarVel.normalize(), 1-Math.exp(-1.8*dt)).projectOnPlane(skate.normal).normalize();
+    surface.forward.lerp(planarVel.normalize(), 1-Math.exp(-1.8*dt)).projectOnPlane(surface.normal).normalize();
   }
   const lateral=vel.dot(tangentRight);
   vel.addScaledVector(tangentRight, -lateral*(1-Math.exp(-7.5*dt)));  // wheel grip: lean carves, it does not strafe
 
-  const downhill=_sk3.copy(skate.gravity).projectOnPlane(skate.normal);
-  if(downhill.lengthSq()>1e-4) vel.addScaledVector(downhill.normalize(), (skate.side==="inside"?18:7)*sizeSpeed*dt);
+  // NOT normalized: gravity's tangential pull should shrink to zero right at the low point (same
+  // as a real slope's sin(angle) component), or it'd keep shoving at full strength through the
+  // bottom and swing back up the other side forever instead of settling.
+  const downhill=_sk3.copy(surface.gravity).projectOnPlane(surface.normal);
+  vel.addScaledVector(downhill, 10*sizeSpeed*dt);
 
-  vel.projectOnPlane(skate.normal);
+  vel.projectOnPlane(surface.normal);
   const max=(boost>1 ? 46 : 30) * sizeSpeed;
   if(vel.length()>max) vel.setLength(max);
   vel.multiplyScalar(Math.pow(anyDrive ? 0.982 : 0.991, dt*60));
   if(!anyDrive && vel.lengthSq()<0.0025) vel.set(0,0,0);
   playerPos.addScaledVector(vel, dt);
-  resnapSkate(dt);
+  resnapSurface(dt);
 }
 // jetpack's auto-landing walks, it doesn't skateboard: direct, responsive movement snapped to the
 // surface tangent plane, no lean/carve momentum — reuses the same surface-latch (attach/resnap/
-// detach) as skateboarding, just with plain-walk physics instead of updateSkate's carving model.
+// detach) as skateboarding, just with plain-walk physics instead of updateBoard's carving model.
 function updateWalk(dt, boost, anyDrive){
-  if(!skate.active) return;
-  updateSkateGravity();
-  const f=_sk1.copy(fwd).projectOnPlane(skate.normal);
-  if(f.lengthSq()<1e-4) f.copy(vel).projectOnPlane(skate.normal);
-  if(f.lengthSq()<1e-4) f.copy(right).projectOnPlane(skate.normal);
+  if(!surface.active) return;
+  updateSurfaceGravity();
+  const f=_sk1.copy(fwd).projectOnPlane(surface.normal);
+  if(f.lengthSq()<1e-4) f.copy(vel).projectOnPlane(surface.normal);
+  if(f.lengthSq()<1e-4) f.copy(right).projectOnPlane(surface.normal);
   f.normalize();
-  const r=_sk2.crossVectors(f, skate.normal).normalize();
-  skate.forward.copy(f);
-  skate.lean=0;
+  const r=_sk2.crossVectors(f, surface.normal).normalize();
+  surface.forward.copy(f);
+  surface.lean=0;
 
   const speed=18*(boost>1?1.6:1);   // walk mode is jetpack-only and jetpack's avatar is deliberately
   // tiny — flat speed, not scaled down by avatarMoveScale(), for the same reason as the WASD accel above
@@ -2576,13 +2847,22 @@ function updateWalk(dt, boost, anyDrive){
   if(keys['KeyS']) want.addScaledVector(f, -speed);
   if(keys['KeyD']) want.addScaledVector(r, speed);
   if(keys['KeyA']) want.addScaledVector(r, -speed);
+  // gravity still acts while standing: updateBoard already rolls downhill under gravity, but this
+  // function never did, so an idle player on a curved/sloped patch just sat frozen wherever
+  // resnapSurface's fixed-hover projection put them — reads as glued to the surface rather than
+  // standing on it under real weight. Fold the same downhill pull into the desired velocity. NOT
+  // normalized — the pull needs to shrink to zero right at the low point (like a real slope's
+  // sin(angle) component), or it'd cruise through the bottom at full speed and swing up the other
+  // side forever instead of settling.
+  const downhill=_sk0.copy(surface.gravity).projectOnPlane(surface.normal);
+  want.addScaledVector(downhill, 8);
   // snap toward the desired velocity rather than accelerate-and-coast — no momentum carry is
   // exactly what makes this read as walking instead of skating.
-  vel.lerp(want, 1-Math.exp(-12*dt));
-  vel.projectOnPlane(skate.normal);
+  vel.lerp(want, 1-Math.exp(-24*dt));
+  vel.projectOnPlane(surface.normal);
   if(!anyDrive && vel.lengthSq()<0.01) vel.set(0,0,0);
   playerPos.addScaledVector(vel, dt);
-  resnapSkate(dt);
+  resnapSurface(dt);
 }
 function updateBoardAir(dt){
   if(!boardAir.active) return;
@@ -2590,18 +2870,31 @@ function updateBoardAir(dt){
   boardAir.cooldown = Math.max(0, boardAir.cooldown-dt);
   if(!boardAir.root || !isVisibleObject(boardAir.root)){ boardAir.active=false; setToolStates(); return; }
   boardGravityFor(boardAir.root, boardAir.side, boardAir.normal, boardAir.gravity);
-  vel.addScaledVector(boardAir.gravity, (boardAir.side==="inside"?48:58)*avatarMoveScale()*dt);
+  vel.addScaledVector(boardAir.gravity, 52*avatarMoveScale()*dt);
 }
 function tryBoardAirLand(dt){
   if(!boardAir.active || boardAir.cooldown>0 || !boardAir.root || !isVisibleObject(boardAir.root)) return;
   const rootR=boardAir.root.userData.r||30;
   const far=hoverFor(boardAir.root)+Math.min(rootR*1.5, Math.max(8, vel.length()*dt*3.2));
-  let found=raycastSkateRoots(playerPos, _sk0.copy(boardAir.gravity), far, [boardAir.root]);
-  if(!found && boardAir.side==="outside") found=raycastSkateRoots(playerPos, _sk0.copy(boardAir.normal).negate(), far*1.4, [boardAir.root]);
-  if(!found && boardAir.side==="inside") found=raycastSkateRoots(playerPos, _sk0.copy(WORLD_DOWN), far*1.2, [boardAir.root]);
+  let found=raycastSurfaceRoots(playerPos, _sk0.copy(boardAir.gravity), far, [boardAir.root]);
+  // this fallback exists for skimming past a curved surface where the straight-down raycast misses
+  // because the ground curves out from underfoot. Two things about the old version broke jumping
+  // off a small/convex organelle: (1) aiming back along the FROZEN launch-time normal re-found the
+  // ground the instant a jump's upward impulse decayed even slightly — a real jump off a small round
+  // organelle only clears a couple of units of height, well within that search radius, so it looked
+  // like an instant bounce; gated below on no longer still rising away from the surface. (2) once a
+  // jump has real sideways drift, that frozen direction stops pointing anywhere near the mesh at
+  // all, so landing never triggers and you fall forever — aim at the mesh's actual current center
+  // instead (same technique findSurface() already uses), which stays valid regardless of drift.
+  if(!found && boardAir.side==="outside" && vel.dot(boardAir.normal)<=0){
+    const c=surfaceRootCenter(boardAir.root);
+    const toCenter=_sk1.copy(c).sub(playerPos);
+    if(toCenter.lengthSq()>1e-4) found=raycastSurfaceRoots(playerPos, toCenter, toCenter.length()+rootR+8, [boardAir.root]);
+  }
+  if(!found && boardAir.side==="inside") found=raycastSurfaceRoots(playerPos, _sk0.copy(WORLD_DOWN), far*1.2, [boardAir.root]);
   if(found && found.root===boardAir.root){
     boardAir.active=false;
-    attachSkate(found, boardAir.mode);
+    attachSurface(found, boardAir.mode);
   }
 }
 // jetpack mode: meshes are solid from EVERY direction, not just "landable from above" — flying
@@ -2609,12 +2902,12 @@ function tryBoardAirLand(dt){
 // Swept raycast from where you were to where this frame's move just put you; if that crossed a
 // real mesh's surface, push back out to just outside it and kill the into-surface component of
 // velocity (slide along it) instead of letting the tunnel-through happen.
-// skateRoots() itself (a full pass over every mesh) is the expensive part — this runs every
+// surfaceRoots() itself (a full pass over every mesh) is the expensive part — this runs every
 // frame unconditionally (unlike the throttled auto-land check), so only refresh the candidate
 // list periodically and reuse it for the in-between frames' swept raycast; the raycast itself
 // still uses this frame's exact prev/current position, so accuracy doesn't suffer, just the
 // "who's worth considering" list lags by up to jetCollideTimer's interval (padded for it below).
-// collision candidates deliberately don't use skateRoots()'s landability size floor — something
+// collision candidates deliberately don't use surfaceRoots()'s landability size floor — something
 // too small to stand on should still be solid enough to not clip through.
 function collisionRoots(){
   const seen=new Set(), out=[];
@@ -2635,7 +2928,14 @@ function nearAnyHole(mesh, worldPos){
   const holes=mesh.userData.punchHoles;
   if(!holes || !holes.length) return false;
   const local=mesh.worldToLocal(worldPos.clone());
-  for(const h of holes) if(local.distanceTo(h.origin) < h.radius+2) return true;
+  for(const h of holes){
+    // a sphere-around-the-entry-point check only covers the hole's mouth — on a hollow shell the
+    // drilled tunnel runs on through the wall and across whatever cavity is behind it, so check
+    // the whole bored cylinder (same along/lateral test punchMesh used to cut it), not just its opening.
+    const toP=local.clone().sub(h.origin);
+    const along=toP.dot(h.dir), lateral2=toP.lengthSq()-along*along;
+    if(along>-2 && along<h.depth+2 && lateral2<(h.radius+2)*(h.radius+2)) return true;
+  }
   return false;
 }
 let jetCollideRoots=[], jetCollideTimer=0;
@@ -2653,55 +2953,36 @@ function jetpackCollide(prevPos, dt){
     jetCollideTimer=0.1;
     const probeDist=40;
     jetCollideRoots=collisionRoots().filter(m=>{
-      const c=skateRootCenter(m), r=m.userData.r||0;
+      const c=surfaceRootCenter(m), r=m.userData.r||0;
       if(prevPos.distanceTo(c)-r >= probeDist) return false;
       if(m.userData.punched && nearAnyHole(m, prevPos)) return false;
       return true;
     });
   }
   if(!jetCollideRoots.length) return;
-  const found=raycastSkateRoots(prevPos, dir, moveLen+0.5, jetCollideRoots);
+  const found=raycastSurfaceRoots(prevPos, dir, moveLen+0.5, jetCollideRoots);
   if(!found) return;
   const n=_jetHitNormal.copy(sampledHitNormal(found.hit));
   if(n.dot(dir)>0) n.negate();   // orient outward relative to travel direction, not playerPos (which may already be past the surface)
+  const _dbgFrom=playerPos.clone();
   playerPos.copy(found.hit.point).addScaledVector(n, hoverFor(found.root));
   vel.projectOnPlane(n);
+  // this is pure collision-avoidance, not a resting state — with no active auto-land, gravity
+  // just re-accumulates every following frame and pulls you right back into the exact same
+  // collision, forever: pushed out, fall back in, pushed out again, read as vibrating/bouncing
+  // in place. If you've landed on something floor-like (mostly-upward normal) and aren't actively
+  // flying into it, kill vertical velocity outright so gravity's next tiny increment doesn't
+  // immediately retrigger the same collision — the instant real input resumes, velocity rebuilds
+  // from that fresh, so this doesn't cost any real momentum while actually piloting.
+  if(n.dot(WORLD_UP)>0.4 && !(keys['KeyW']||keys['KeyS']||keys['KeyA']||keys['KeyD']||keys['Space'])) vel.y=0;
+  console.log('[celldive][jetpackCollide] pushback', {type:found.root.userData.type, uid:found.root.userData.uid,
+    hitDist:+found.hit.distance.toFixed(2), normal:n.toArray().map(v=>+v.toFixed(2)),
+    moveDelta:+_dbgFrom.distanceTo(playerPos).toFixed(2), candidateCount:jetCollideRoots.length,
+    from:_dbgFrom.toArray().map(v=>+v.toFixed(1)), to:playerPos.toArray().map(v=>+v.toFixed(1))});
 }
-// jetpack mode: meshes are "solid" underfoot — while falling (not already skating), check just
-// below for a surface and auto-latch onto it in WALK mode (updateWalk) — reuses the surface-latch
-// tracking (attach/resnap/detach) but not the skateboard's carving physics; jetpack shouldn't
-// turn into a skateboard just because you landed on something.
-let jetLandTimer=0, jetLandGrace=0;
-function tryJetpackLand(dt){
-  jetLandGrace=Math.max(0, jetLandGrace-dt);
-  if(jetLandGrace>0) return;   // just left a surface — give thrust a moment to actually work
-  // before the very next 80ms check can snap you right back onto the same spot
-  jetLandTimer-=dt; if(jetLandTimer>0) return; jetLandTimer=0.15;   // dense specimens (hundreds of small nearby meshes) make even the cheap prefilter add up at 80ms
-  const probeDist=avatarHover()+5;
-  // cheap bounding-sphere distance filter BEFORE the real (per-triangle) raycast — without this,
-  // every ~80ms did a full raycast against every mesh in the dive (up to 600 on a busy specimen),
-  // most of them nowhere near the player. This is what was making jetpack mode's frame rate sag.
-  const roots=skateRoots().filter(m=>{
-    const c=skateRootCenter(m), r=m.userData.r||0;
-    const d=playerPos.distanceTo(c);
-    // once you're inside a mesh you've cut a hole into, don't auto-land on its own inner wall —
-    // the cavity is usually barely bigger than the hole itself, so surface-tracking there reads
-    // as "movement is broken"/weird gravity. Free-flying inside (plain jetpack gravity+thrust,
-    // no surface snap) is simpler and is what "falling in" should actually feel like. Checked
-    // against the actual hole location, not the whole bounding sphere (see nearAnyHole) — a
-    // coarse d<r check here disabled landing anywhere near a large/irregular mesh's centroid
-    // the instant it had a hole anywhere, not just near the opening itself.
-    if(m.userData.punched && d < r && nearAnyHole(m, playerPos)) return false;
-    return d - r < probeDist;
-  });
-  if(!roots.length) return;
-  const found=raycastSkateRoots(playerPos, _sk0.copy(WORLD_DOWN), probeDist, roots);
-  if(found) attachSkate(found, 'walk');
-}
-
 // ---- HUD refs ----------------------------------------------------
 const ui = {
-  depth:document.getElementById('depth'), speed:document.getElementById('speed'), fuel:document.getElementById('fuel'),
+  fps:document.getElementById('fps'), depth:document.getElementById('depth'), speed:document.getElementById('speed'), fuel:document.getElementById('fuel'),
   found:document.getElementById('found'), objName:document.getElementById('objName'),
   obj:document.getElementById('obj'), objHint:document.getElementById('objHint'),
   flash:document.getElementById('flash'), specId:document.getElementById('specId'),
@@ -2760,7 +3041,8 @@ function exitToSelect(opts){
 const tools = {
   cargo:document.getElementById('tCargo'), narr:document.getElementById('tNarr'), tour:document.getElementById('tTour'),
   amb:document.getElementById('tAmb'), color:document.getElementById('tColor'), shadow:document.getElementById('tShadow'),
-  view:document.getElementById('tView'), mode:document.getElementById('tMode'), skate:document.getElementById('tSkate'),
+  dust:document.getElementById('tDust'), dynLOD:document.getElementById('tDynLOD'), flashlight:document.getElementById('tFlashlight'),
+  view:document.getElementById('tView'), mode:document.getElementById('tMode'), surface:document.getElementById('tSurface'),
   avatar:document.getElementById('tAvatar'), shrink:document.getElementById('tShrink'), grow:document.getElementById('tGrow'),
   laser:document.getElementById('tLaser'),
 };
@@ -2775,15 +3057,16 @@ function setToolStates(){
   tools.amb.classList.toggle('on', ambienceOn);
   tools.color.classList.toggle('on', uniqueColors);
   tools.shadow.classList.toggle('on', shadowsOn);
+  tools.dust.classList.toggle('on', dustOn);
+  tools.dynLOD.classList.toggle('on', dynamicLOD);
+  tools.flashlight.classList.toggle('on', spotIntensity>0);
   tools.view.classList.toggle('on', thirdPerson);
   tools.view.textContent = thirdPerson ? '✕ first view' : (avatarMode==="kinesin" ? '🧬 avatar view' : '🚌 bus view');
   tools.mode.textContent = explorationMode==='jetpack' ? '🚌 flight mode' : '🚀 jetpack mode';
-  tools.skate.classList.toggle('on', skate.active || boardAir.active);
-  // in jetpack mode there's no manual "start skateboarding" option — you only ever end up
-  // attached (walking) by landing on something — so hide the button unless there's something
-  // to stop.
-  tools.skate.classList.toggle('hidden', explorationMode==='jetpack' && !skate.active && !boardAir.active);
-  tools.skate.textContent = skate.active ? (skate.mode==='walk' ? '✕ stop walking' : '✕ detach') : boardAir.active ? '↧ air' : '🛹 skateboard';
+  tools.surface.classList.toggle('on', surface.active || boardAir.active);
+  tools.surface.classList.toggle('hidden', boardAir.active && !surface.active);
+  tools.surface.textContent = surface.active ? (surface.mode==='walk' ? '✕ stop walking' : '✕ detach')
+    : boardAir.active ? '↧ air' : (explorationMode==='jetpack' ? '🛹 land here' : '🛹 skateboard');
   tools.avatar.classList.toggle('on', avatarMode==="kinesin");
   tools.avatar.textContent = avatarMode==="kinesin" ? '🧬 kinesin' : '🚌 bus';
   tools.shrink.textContent = '- '+Math.round(avatarScale*100)+'%';
@@ -2795,9 +3078,9 @@ function setToolStates(){
 // from "fly" to "thrust/carve" — showing the wrong one read as the instructions being just wrong.
 function updateHelpText(){
   const jet = explorationMode==='jetpack';
-  const skating = skate.active || boardAir.active;
+  const skating = surface.active || boardAir.active;
   document.getElementById('helpFly').classList.toggle('hidden', jet || skating);
-  document.getElementById('helpSkate').classList.toggle('hidden', jet || !skating);
+  document.getElementById('helpBoard').classList.toggle('hidden', jet || !skating);
   document.getElementById('helpJetpack').classList.toggle('hidden', !jet);
 }
 function toggleNarration(){ narrationOn=!narrationOn; if(!narrationOn && 'speechSynthesis' in window) speechSynthesis.cancel(); setToolStates();
@@ -2809,9 +3092,12 @@ tools.tour.onclick = ()=> touring ? stopTour() : startTour();
 tools.amb.onclick = ()=> setAmbience();
 tools.color.onclick = ()=> toggleColors();
 tools.shadow.onclick = ()=> toggleShadows();
+tools.dust.onclick = ()=> toggleDust();
+tools.dynLOD.onclick = ()=> toggleDynamicLOD();
+tools.flashlight.onclick = ()=> toggleFlashlight();
 tools.view.onclick = toggleView;
 tools.mode.onclick = ()=> switchExplorationMode(explorationMode==='jetpack' ? 'flight' : 'jetpack');
-tools.skate.onclick = toggleSkateMode;
+tools.surface.onclick = toggleSurfaceMode;
 tools.avatar.onclick = cycleAvatar;
 tools.shrink.onclick = ()=> resizeAvatar(-1);
 tools.grow.onclick = ()=> resizeAvatar(1);
@@ -2826,7 +3112,7 @@ document.getElementById('menuOverlay').addEventListener('pointerdown', e=>{
 const resSlider=document.getElementById('resSlider'), resVal=document.getElementById('resVal');
 const RES_LABELS={6:'full',5:'high',4:'med',3:'low',2:'coarse',1:'min'};
 if(resSlider) resSlider.addEventListener('input', ()=>{
-  const v=+resSlider.value; resCap=6-v; resVal.textContent=RES_LABELS[v]||v;
+  const v=+resSlider.value; resCap=(6-v)/5; resVal.textContent=RES_LABELS[v]||v;
 });
 
 // ---- target picking ----------------------------------------------
@@ -2901,7 +3187,14 @@ function gpuPick(){
 // triangles for big organelles (nucleus, etc) — the old, much lower cap here silently refused to
 // cut those specific meshes at all (while working fine on smaller ones right next to them),
 // which read as "the laser doesn't always work" with no visible reason why.
-const LASER_MAX_RANGE=70, LASER_PUNCH_TRIS=1500000, LASER_MAX_DEPTH=40, LASER_HEAT_SECONDS=4;
+// LASER_PUNCH_TRIS raised on the back of two changes in punchMesh: the BVH (computeBoundsTree)
+// narrows the per-triangle in-drill test down to just the candidates near the drill instead of
+// every triangle, AND cut triangles are now collapsed in place (see punchMesh) instead of
+// rebuilding the whole index — so a punch tick's cost no longer scales with total mesh size at
+// all, just with how much is actually near the drill. The one part that's still genuinely
+// O(mesh size) — recomputing normals and the BVH — is deferred to finalizePunchedMesh, paid once
+// when the laser stops cutting a given mesh rather than on every ~150ms retick.
+const LASER_MAX_RANGE=70, LASER_PUNCH_TRIS=4000000, LASER_MAX_DEPTH=40, LASER_HEAT_SECONDS=4;
 const _laserRay=new THREE.Raycaster();
 let laserTargetMesh=null, laserHeat=0, laserTooBigWarned=false;
 const _laserLocalOrigin=new THREE.Vector3(), _laserLocalDir=new THREE.Vector3();
@@ -2938,31 +3231,82 @@ function punchMesh(mesh, localOrigin, localDir, radius, depth){
   if(!idxAttr) return false;
   if(idxAttr.count/3>LASER_PUNCH_TRIS) return 'toobig';
   const posAttr=geo.attributes.position, idx=idxAttr.array;
-  const a=new THREE.Vector3(), b=new THREE.Vector3(), c=new THREE.Vector3(), cen=new THREE.Vector3(), toC=new THREE.Vector3();
-  const r2=radius*radius, kept=[];
-  for(let i=0;i<idx.length;i+=3){
-    a.fromBufferAttribute(posAttr, idx[i]); b.fromBufferAttribute(posAttr, idx[i+1]); c.fromBufferAttribute(posAttr, idx[i+2]);
-    cen.copy(a).add(b).add(c).divideScalar(3);
-    toC.copy(cen).sub(localOrigin);
-    const along=toC.dot(localDir), lateral2=toC.lengthSq()-along*along;
-    const inDrill = along>-1 && along<depth && lateral2<r2;
-    if(!inDrill) kept.push(idx[i], idx[i+1], idx[i+2]);
+  const r2=radius*radius;
+  let changed=false;
+  // collapse each in-drill triangle to zero area IN PLACE (all 3 corners -> the same vertex)
+  // instead of rebuilding the index buffer to exclude it — invisible and never raycast-hittable
+  // either way, but this only touches the handful of triangles actually near the drill, not the
+  // whole mesh. Rebuilding the index (the old approach) meant deciding keep-or-discard for EVERY
+  // triangle in the mesh regardless of how local the cut was — that, plus recomputing normals,
+  // bounding sphere, and the BVH from scratch, are all genuinely O(total mesh size); the BVH
+  // shapecast below only narrows down WHICH triangles need the test, it can't shrink that other
+  // cost. So the expensive parts (computeVertexNormals, BVH rebuild) are deferred entirely — see
+  // finalizePunchedMesh, paid once when the laser stops cutting this mesh, not on every retick.
+  // computeBoundingSphere() never actually depended on the index (it scans the position
+  // attribute directly, checked against the r128 source), so it never needed rebuilding here at all.
+  const collapse=(i)=>{ if(idx[i]!==idx[i+1] || idx[i]!==idx[i+2]){ idx[i+1]=idx[i]; idx[i+2]=idx[i]; changed=true; } };
+  if(geo.boundsTree){
+    const sphereCenter=localOrigin.clone().addScaledVector(localDir, depth*0.5);
+    const sphereRadius=Math.sqrt((depth*0.5)*(depth*0.5)+r2)+1;
+    const drillSphere=new THREE.Sphere(sphereCenter, sphereRadius);
+    const cen=new THREE.Vector3(), toC=new THREE.Vector3();
+    const inRange=(p)=>{ toC.copy(p).sub(localOrigin); const along=toC.dot(localDir);
+      return along>-1 && along<depth && (toC.lengthSq()-along*along)<r2; };
+    geo.boundsTree.shapecast(mesh, {
+      intersectsBounds: box=>box.intersectsSphere(drillSphere),
+      intersectsTriangle:(triangle, triIndex)=>{
+        // check the centroid AND all three corners, not just the centroid — on a coarse/low-poly
+        // mesh (a neuroglancer ROI/region mesh, for instance, unlike the dense FIB-SEM organelle
+        // meshes this was tuned against) individual triangles can be far bigger than the drill
+        // radius, so a hit near a corner/edge left the centroid well outside range while the
+        // triangle clearly still overlapped the drill — the laser silently did nothing at all.
+        cen.copy(triangle.a).add(triangle.b).add(triangle.c).divideScalar(3);
+        if(inRange(cen) || inRange(triangle.a) || inRange(triangle.b) || inRange(triangle.c)) collapse(triIndex*3);
+        return false;   // keep traversing — collapsing every in-range triangle, not stopping at the first
+      },
+    });
+  } else {
+    // no BVH (shouldn't happen for a real mesh, but stay correct if one's ever missing)
+    const a=new THREE.Vector3(), b=new THREE.Vector3(), c=new THREE.Vector3(), cen=new THREE.Vector3(), toC=new THREE.Vector3();
+    const inRange=(p)=>{ toC.copy(p).sub(localOrigin); const along=toC.dot(localDir);
+      return along>-1 && along<depth && (toC.lengthSq()-along*along)<r2; };
+    for(let i=0;i<idx.length;i+=3){
+      a.fromBufferAttribute(posAttr, idx[i]); b.fromBufferAttribute(posAttr, idx[i+1]); c.fromBufferAttribute(posAttr, idx[i+2]);
+      cen.copy(a).add(b).add(c).divideScalar(3);
+      if(inRange(cen) || inRange(a) || inRange(b) || inRange(c)) collapse(i);
+    }
   }
-  if(kept.length===idx.length) return false;   // nothing new in range — no rebuild needed
-  geo.setIndex(kept);
-  geo.computeVertexNormals(); geo.computeBoundingSphere();
-  mesh.userData.r=geo.boundingSphere.radius;
-  mesh.userData.center=geo.boundingSphere.center.clone();
+  if(!changed) return false;   // nothing new in range — no update needed
+  idxAttr.needsUpdate=true;
   mesh.userData.punched=true;
+  mesh.userData.needsPunchFinalize=true;   // normals/BVH refresh deferred — see finalizePunchedMesh
   // record exactly where this hole is (local space) — collision needs to let you through only
   // near an actual opening, not anywhere within the mesh's whole bounding sphere (which for a
-  // non-spherical/irregular real mesh can extend well past where the real surface is).
-  (mesh.userData.punchHoles=mesh.userData.punchHoles||[]).push({origin:localOrigin.clone(), radius});
+  // non-spherical/irregular real mesh can extend well past where the real surface is). Store the
+  // full drilled cylinder (origin+dir+radius+depth), not just the entry point — a hollow shell's
+  // tunnel can run well past a small sphere around its mouth (through the wall, across the actual
+  // cavity behind it), and nearAnyHole needs to recognize the WHOLE bored-out path as open, not
+  // just the opening itself, or you hit an invisible wall partway down a hole you already cut.
+  (mesh.userData.punchHoles=mesh.userData.punchHoles||[]).push({origin:localOrigin.clone(), dir:localDir.clone(), radius, depth});
   return true;
+}
+// the part of a punch that can't be scoped to just the cut triangles (recomputing every vertex's
+// lighting normal, rebuilding the BVH) — deferred out of punchMesh (called ~7x/sec while firing)
+// to here, called once when the laser actually stops cutting this specific mesh (updateLaser).
+function finalizePunchedMesh(mesh){
+  if(!mesh || !mesh.userData.needsPunchFinalize) return;
+  const geo=mesh.geometry;
+  geo.computeVertexNormals();
+  // BVH rebuild deferred the same way as buildLODGeometry (see there) — disposeBoundsTree makes
+  // it null immediately, which acceleratedRaycast already handles by falling back to plain
+  // raycasting, so this mesh stays fully correct (just briefly unaccelerated) until the deferred
+  // rebuild lands, instead of a synchronous hitch right as you release the trigger.
+  if(geo.disposeBoundsTree){ geo.disposeBoundsTree(); setTimeout(()=>geo.computeBoundsTree({maxLeafTris:40}), 0); }
+  mesh.userData.needsPunchFinalize=false;
 }
 function updateLaser(dt){
   if(!laserBeam) return;
-  if(!laserOn || explorationMode!=='jetpack'){ laserBeam.visible=false; laserTargetMesh=null; laserHeat=0; return; }
+  if(!laserOn || explorationMode!=='jetpack'){ laserBeam.visible=false; finalizePunchedMesh(laserTargetMesh); laserTargetMesh=null; laserHeat=0; return; }
   laserBeam.visible=true;
   // firing target is found with the laser's OWN raycast against nearby real meshes — deliberately
   // not reusing aimHit (the analyze crosshair's GPU pick): that one only refreshes ~20x/sec, skips
@@ -2985,6 +3329,9 @@ function updateLaser(dt){
 
   const firingOnTarget = fireHeld && hit && hitMesh.userData.real;
   if(!firingOnTarget || hitMesh!==laserTargetMesh){
+    // leaving this target (stopped firing, or switched aim) — pay any deferred normals/BVH cost
+    // now, once, rather than never or mid-burn.
+    finalizePunchedMesh(laserTargetMesh);
     // (re)starting: freeze the entry point/direction now, so re-raycasting later (which could
     // now tunnel through an existing hole) is never needed for this drill.
     laserTargetMesh = firingOnTarget ? hitMesh : null;
@@ -3009,6 +3356,8 @@ function updateLaser(dt){
   }
   if(!firingOnTarget) return;
   punchTimer-=dt; if(punchTimer>0) return; punchTimer=0.15;
+  // a flat retry interval is fine again now — punchMesh's per-tick cost no longer scales with
+  // mesh size (collapsed in place, BVH-scoped), so there's nothing left to pace against here.
   // floored, not just scaled down with avatarScale — at jetpack's extreme tininess the unfloored
   // radius could end up smaller than the mesh's own triangle size, so nothing would ever be in
   // range to remove (the hole "not working" at all). This still stays comfortably fittable-through
@@ -3090,10 +3439,17 @@ function setCompass(tp){
 
 // ---- main loop ---------------------------------------------------
 const clock = new THREE.Clock();
+let fpsSmoothed=60, fpsUiTimer=0;   // standard smoothed-fps readout (EMA over raw per-frame rate, redrawn a few times/sec)
 function tick(){
   raf = requestAnimationFrame(tick);
   const dt = Math.min(clock.getDelta(), 0.05);   // keep the clock moving even while paused, so
   // resuming doesn't see one huge dt covering the whole time the menu was up
+  // clamp the raw instantaneous rate before it ever reaches the EMA — browsers clamp
+  // performance.now() resolution (anti-fingerprinting/Spectre mitigation), so two consecutive
+  // rAF callbacks can legitimately read the identical timestamp and report dt=0; feeding that
+  // straight into 1/dt spiked the display to six-figure "fps" readings.
+  fpsSmoothed += (Math.min(240, 1/Math.max(dt,1e-6)) - fpsSmoothed) * 0.1;
+  fpsUiTimer -= dt; if(fpsUiTimer<=0){ fpsUiTimer=0.2; ui.fps.textContent = Math.round(fpsSmoothed); }
   if(uiFree){ renderer.render(scene,camera); return; }   // TAB menu is up — world is fully paused
   if(awaitingFirstClick){ renderer.render(scene,camera); return; }   // hasn't clicked "begin" yet — nothing moves or looks around
   scanCooldown = Math.max(0, scanCooldown-dt);
@@ -3114,16 +3470,16 @@ function tick(){
   right.crossVectors(fwd, WORLD_UP).normalize();
 
   if(!touring){
-    // NOTE: skate mode only checks boost>1 (a fixed 1.55x, set in updateSkate) — it doesn't scale
+    // NOTE: surface mode only checks boost>1 (a fixed 1.55x, set in updateBoard) — it doesn't scale
     // with this number, so this only tunes free-flight/jetpack speed. It was 2.8, which made
     // boosted free flight end up quite a bit faster than boosted surface-skating at the same avatar
     // size — since jetpack mode now auto-attaches to surfaces often, that mismatch was showing up
     // as "forward is fast here, slow there" depending on whether you'd been auto-latched. Lower
     // multiplier brings the two much closer together.
     const boost=(keys['ShiftLeft']||keys['ShiftRight'])?1.8:1;
-    if(skate.active){
-      if(skate.mode==='walk') updateWalk(dt, boost, anyDrive);
-      else updateSkate(dt, boost, anyDrive);
+    if(surface.active){
+      if(surface.mode==='walk') updateWalk(dt, boost, anyDrive);
+      else updateBoard(dt, boost, anyDrive);
     } else {
       // avatarMoveScale() ties speed to avatar size — sensible in flight mode (a modest 0.06-2.6x
       // range), but jetpack's avatar is now deliberately tiny relative to the mesh (0.01% of the
@@ -3133,18 +3489,56 @@ function tick(){
       const accel=(boardAir.active?18:52)*boost*(explorationMode==='jetpack' ? 1 : avatarMoveScale());
       updateBoardAir(dt);
       const jetpacking = explorationMode==='jetpack' && !boardAir.active;
-      if(keys['KeyW']) vel.addScaledVector(fwd, accel*dt);
-      if(keys['KeyS']) vel.addScaledVector(fwd,-accel*dt);
-      if(keys['KeyD']) vel.addScaledVector(right, accel*dt);
-      if(keys['KeyA']) vel.addScaledVector(right,-accel*dt);
-      if(!boardAir.active && !jetpacking && keys['KeyR']) vel.addScaledVector(WORLD_UP, accel*dt);
-      if(!boardAir.active && !jetpacking && keys['KeyF']) vel.addScaledVector(WORLD_UP,-accel*dt);
+      if(jetpacking){
+        // fixed target glide speed rather than the bus's unbounded accelerate-and-coast — holding
+        // a direction shouldn't keep speeding you up. Some coast is still nice though (stopping or
+        // changing direction dead-instantly read as "stopping short"), so ease toward the target
+        // over a few frames instead of snapping to it like surface-walking does. Horizontal only:
+        // vertical motion is entirely gravity + SPACE thrust below, not WASD or camera pitch.
+        const jetSpeed=18*(boost>1?1.6:1);
+        const flatFwd=_sk0.copy(fwd); flatFwd.y=0;
+        if(flatFwd.lengthSq()<1e-4) flatFwd.copy(right); else flatFwd.normalize();
+        const flatRight=_sk1.crossVectors(flatFwd, WORLD_UP).normalize();
+        const wantH=_sk2.set(0,0,0);
+        if(keys['KeyW']) wantH.addScaledVector(flatFwd, jetSpeed);
+        if(keys['KeyS']) wantH.addScaledVector(flatFwd, -jetSpeed);
+        if(keys['KeyD']) wantH.addScaledVector(flatRight, jetSpeed);
+        if(keys['KeyA']) wantH.addScaledVector(flatRight, -jetSpeed);
+        const vy=vel.y;
+        vel.y=0;
+        vel.lerp(wantH, 1-Math.exp(-5*dt));
+        vel.y=vy;
+      } else {
+        if(keys['KeyW']) vel.addScaledVector(fwd, accel*dt);
+        if(keys['KeyS']) vel.addScaledVector(fwd,-accel*dt);
+        if(keys['KeyD']) vel.addScaledVector(right, accel*dt);
+        if(keys['KeyA']) vel.addScaledVector(right,-accel*dt);
+        if(!boardAir.active && keys['KeyR']) vel.addScaledVector(WORLD_UP, accel*dt);
+        if(!boardAir.active && keys['KeyF']) vel.addScaledVector(WORLD_UP,-accel*dt);
+      }
       // jetpack mode: gravity always pulls down; SPACE thrusts against it, draining a generous
       // fuel tank (regenerates while not thrusting) — vertical movement otherwise comes from
       // that alone, not free R/F flight.
       // Surface-running reuses the existing skateboard-latch (X).
       if(jetpacking){
-        vel.addScaledVector(WORLD_DOWN, JET_GRAVITY*dt);
+        // jetpackCollide's pushback is pure collision-avoidance with no notion of "resting" —
+        // without this, standing motionless on top of something falls back into the very same
+        // collision every time gravity rebuilds enough velocity to cross the hover gap again,
+        // forever: settle, fall, hit, settle, fall, hit — a perpetual slow bounce that never
+        // actually stops. This does NOT engage walk/surface mode (no tracking, no tangent
+        // movement, no HUD change) — it only withholds gravity while passively resting; the
+        // instant a movement key is pressed, gravity (and flight) resumes immediately.
+        const noInput = !(keys['KeyW']||keys['KeyS']||keys['KeyA']||keys['KeyD']||keys['Space']);
+        // search generously (falling fast covers real ground per frame) but only actually commit
+        // to resting once genuinely near the mesh's own hover distance — otherwise this would
+        // stop the fall early/high, floating well above the surface instead of settling on it.
+        let resting=false;
+        if(noInput && jetCollideRoots.length){
+          const restHit=raycastSurfaceRoots(playerPos, _sk0.set(0,-1,0), avatarHover()+8, jetCollideRoots);
+          if(restHit && restHit.hit.distance<=hoverFor(restHit.root)+1 && rawOrientedHitNormal(restHit.hit).dot(WORLD_UP)>0.4) resting=true;
+        }
+        if(resting){ if(vel.y<0) vel.y=0; }
+        else vel.addScaledVector(WORLD_DOWN, JET_GRAVITY*dt);
         const thrusting = keys['Space'] && (JET_INFINITE_FUEL || jetFuel>0);
         // NOT scaled by avatarMoveScale — gravity above isn't either, so thrust reliably beats
         // it regardless of avatar size (shrinking the avatar had been quietly weakening thrust
@@ -3162,7 +3556,8 @@ function tick(){
       playerPos.addScaledVector(vel, dt);
       if(explorationMode==='jetpack') jetpackCollide(_prevPlayerPos, dt);
       tryBoardAirLand(dt);
-      if(jetpacking) tryJetpackLand(dt);
+      // no more passive auto-land in jetpack free-flight — falling should just fall; land on
+      // purpose with X (toggleSurfaceMode).
     }
   }
 
@@ -3171,36 +3566,36 @@ function tick(){
   if(dlen > CELL_R-4){ playerPos.multiplyScalar((CELL_R-4)/dlen); vel.multiplyScalar(0.3); }
   // jetpack floor: a hard stop at the bottom of the play volume so you can't just fall forever
   // when there's no mesh underneath you.
-  if(explorationMode==='jetpack' && !skate.active){
+  if(explorationMode==='jetpack' && !surface.active){
     if(playerPos.y<JET_FLOOR_Y){ playerPos.y=JET_FLOOR_Y; if(vel.y<0) vel.y=0; }
   }
 
   // place the camera + bus for the active view
   if(thirdPerson && bus){
-    const camUp = skate.active && skate.side==="outside" ? skate.normal : WORLD_UP;
+    const camUp = surface.active && surface.side==="outside" ? surface.normal : WORLD_UP;
     const camScale = Math.max(0.72, Math.sqrt(avatarScale));
     const lat = vel.dot(right);
     busRoll += (Math.max(-0.5,Math.min(0.5,-lat*0.045)) - busRoll)*(1-Math.pow(0.002,dt));  // bank into turns
     bus.visible=true; bus.position.copy(playerPos);
-    if(skate.active){
-      const surfF=_sk0.copy(skate.forward).projectOnPlane(skate.normal);
-      if(surfF.lengthSq()<1e-4) surfF.copy(vel).projectOnPlane(skate.normal);
-      if(surfF.lengthSq()<1e-4) surfF.copy(right).projectOnPlane(skate.normal);
+    if(surface.active){
+      const surfF=_sk0.copy(surface.forward).projectOnPlane(surface.normal);
+      if(surfF.lengthSq()<1e-4) surfF.copy(vel).projectOnPlane(surface.normal);
+      if(surfF.lengthSq()<1e-4) surfF.copy(right).projectOnPlane(surface.normal);
       surfF.normalize();
       const zAxis=_sk1.copy(surfF).negate();
-      const xAxis=_sk2.crossVectors(skate.normal,zAxis).normalize();
-      _skMat.makeBasis(xAxis, skate.normal, zAxis);
+      const xAxis=_sk2.crossVectors(surface.normal,zAxis).normalize();
+      _skMat.makeBasis(xAxis, surface.normal, zAxis);
       bus.quaternion.setFromRotationMatrix(_skMat);
-      bus.rotateZ(skate.lean);
+      bus.rotateZ(surface.lean);
     } else {
       bus.quaternion.copy(qLook); bus.rotateZ(busRoll);
     }
     camera.up.copy(camUp);
-    camera.position.copy(playerPos).addScaledVector(fwd,-10*camScale).addScaledVector(camUp, (skate.active?6:3.6)*camScale).addScaledVector(right,0.4*camScale);
-    camera.lookAt(playerPos.clone().addScaledVector(fwd,8).addScaledVector(camUp, skate.active?1.2:0));
+    camera.position.copy(playerPos).addScaledVector(fwd,-10*camScale).addScaledVector(camUp, (surface.active?6:3.6)*camScale).addScaledVector(right,0.4*camScale);
+    camera.lookAt(playerPos.clone().addScaledVector(fwd,8).addScaledVector(camUp, surface.active?1.2:0));
   } else {
     if(bus) bus.visible=false;
-    camera.up.copy(skate.active && skate.side==="outside" ? skate.normal : WORLD_UP);
+    camera.up.copy(surface.active && surface.side==="outside" ? surface.normal : WORLD_UP);
     camera.position.copy(playerPos);
     camera.quaternion.copy(qLook);
   }
@@ -3279,7 +3674,7 @@ function tick(){
     // custom-source dives have no analyze/objective system (no ORG biology to attach it to) —
     // hover-for-info (below) still works, SHIFT-to-scan just doesn't apply.
     ui.cross.classList.toggle('lock', inRange && !spec.custom);
-    if(inRange && analyzeHeld && scanCooldown<=0 && !skate.active && !spec.custom){
+    if(inRange && analyzeHeld && scanCooldown<=0 && !surface.active && !spec.custom){
       scanProgress = Math.min(1, scanProgress + dt/1.1);
       ui.obj.classList.add('scanning');
       ui.scanbar.style.opacity=1; ui.scanfill.style.width=(scanProgress*100).toFixed(0)+'%';
@@ -3298,8 +3693,8 @@ function tick(){
       const nm=candType?(ORG[candType]?ORG[candType].name:candType):null;
       ui.objHint.innerHTML = nm
         ? `hold <b style="color:#dfe9f5">SHIFT</b> to analyze <b style="color:#9dffb0">${nm}</b>`
-        : skate.active
-          ? `${skate.side} boarding <b style="color:#9dffb0">${skateRootName(skate.root)}</b> · <b style="color:#dfe9f5">SPACE/R</b> jump · <b style="color:#dfe9f5">X</b> detach`
+        : surface.active
+          ? `${surface.side} boarding <b style="color:#9dffb0">${surfaceRootName(surface.root)}</b> · <b style="color:#dfe9f5">SPACE/R</b> jump · <b style="color:#dfe9f5">X</b> detach`
         : `fly up to any organelle, then hold <b style="color:#dfe9f5">SHIFT</b> to analyze`;
     }
   }
@@ -3320,7 +3715,7 @@ function tick(){
       if(audioPadLP) audioPadLP.frequency.value = 700 + c*1600;   // cytoplasm brightens as you close in
     }
   }
-  manageLOD(dt);
+  if(dynamicLOD) manageLOD(dt);   // off by default — see dynamicLOD declaration for why
   updateLaser(dt);
   updateBolts(dt);
   proximityNarrate();
@@ -3328,7 +3723,7 @@ function tick(){
   lodActiveTime = lodLoading>0 ? lodActiveTime+dt : 0;
   ui.stream.classList.toggle('hidden', lodActiveTime < 0.6);
   ui.depth.textContent = (CELL_R - playerPos.length()).toFixed(0)+" nm*";
-  ui.speed.textContent = vel.length().toFixed(1)+(skate.active?" board":boardAir.active?" air":"");
+  ui.speed.textContent = vel.length().toFixed(1)+(surface.active?" board":boardAir.active?" air":"");
 
   renderer.render(scene,camera);
 }
@@ -3343,7 +3738,6 @@ addEventListener('resize', ()=>{ if(!renderer) return;
   if(h && h.kind==='specimen') startDive(describe(h.id), {skipHistory:true});
   else if(h && h.kind==='custom') startCustomDive(h.state, {skipHistory:true});
 })();
-
 })();
 </script>
 </body>
