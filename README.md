@@ -8,7 +8,7 @@ https://davidackerman.github.io/celldive/
 
 ![CELLDIVE in jetpack mode inside a HeLa cell](docs/images/jetpack-hela2.webp)
 
-*Jetpack mode inside jrc_hela-2 from OpenOrganelle: flying toward the nucleus and ER, with the laser heating the ER it is aimed at.*
+*Jetpack mode inside jrc_hela-2 from OpenOrganelle: flying toward the nucleus and ER, with the laser heating the ER it is aimed at. Played back at eight times speed.*
 
 ## Run Locally
 
