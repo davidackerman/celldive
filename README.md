@@ -6,9 +6,9 @@ Play it here:
 
 https://davidackerman.github.io/celldive/
 
-![CELLDIVE's cell picker](docs/images/cell-picker.jpg)
+![CELLDIVE in jetpack mode inside a HeLa cell](docs/images/jetpack-hela2.webp)
 
-*Choosing a cell: each card is a real OpenOrganelle dataset.*
+*Jetpack mode inside jrc_hela-2 from OpenOrganelle: flying toward the nucleus and ER, with the laser heating the ER it is aimed at.*
 
 ## Run Locally
 
