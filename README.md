@@ -6,6 +6,10 @@ Play it here:
 
 https://davidackerman.github.io/celldive/
 
+![CELLDIVE's cell picker](docs/images/cell-picker.jpg)
+
+*Choosing a cell: each card is a real OpenOrganelle dataset.*
+
 ## Run Locally
 
 Open `celldive.html` in a browser. There is no build step.
